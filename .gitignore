@@ -1,0 +1,7 @@
+*~
+*.layout
+*.depend
+obj
+bin
+core
+*.gmon
