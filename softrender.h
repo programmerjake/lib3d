@@ -13,19 +13,19 @@ private:
     shared_ptr<Image> whiteTexture;
     struct PlaneEq
     {
-        Vector normal;
+        VectorF normal;
         float d;
-        PlaneEq(Vector p1, Vector p2, Vector p3)
+        PlaneEq(VectorF p1, VectorF p2, VectorF p3)
         {
             normal = cross(p1 - p2, p1 - p3);
             d = -dot(normal, p1);
         }
-        PlaneEq(Vector normal, float d)
+        PlaneEq(VectorF normal, float d)
         {
             this->normal = normal;
             this->d = d;
         }
-        PlaneEq(Vector normal, Vector p)
+        PlaneEq(VectorF normal, VectorF p)
         {
             this->normal = normal;
             this->d = -dot(normal, p);
@@ -34,7 +34,7 @@ private:
             : PlaneEq(tri.p1, tri.p2, tri.p3)
         {
         }
-        float eval(Vector p) const
+        float eval(VectorF p) const
         {
             return dot(p, normal) + d;
         }

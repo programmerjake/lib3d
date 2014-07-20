@@ -5,11 +5,11 @@ using namespace std;
 
 namespace
 {
-inline Vector gridify(Vector v)
+inline VectorF gridify(VectorF v)
 {
-    constexpr float gridSize = 1 / 32.0;
+    constexpr float gridSize = 1e-2;
     constexpr float invGridSize = 1 / gridSize;
-    return Vector(std::floor(v.x * invGridSize + 0.5) * gridSize, std::floor(v.y * invGridSize + 0.5) * gridSize, std::floor(v.z * invGridSize + 0.5) * gridSize);
+    return VectorF(std::floor(v.x * invGridSize + 0.5) * gridSize, std::floor(v.y * invGridSize + 0.5) * gridSize, std::floor(v.z * invGridSize + 0.5) * gridSize);
 }
 
 inline Triangle gridify(Triangle tri)
@@ -42,13 +42,16 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
     if(tri.p1.z >= 0 && tri.p2.z >= 0 && tri.p3.z >= 0)
         return;
     PlaneEq plane = PlaneEq(tri);
-    if(plane.d <= eps)
+    if(plane.d >= -eps)
         return;
     plane.normal /= -plane.d;
     plane.d = -1;
-    PlaneEq edge1 = PlaneEq(Vector(0), tri.p1, tri.p2);
-    PlaneEq edge2 = PlaneEq(Vector(0), tri.p2, tri.p3);
-    PlaneEq edge3 = PlaneEq(Vector(0), tri.p3, tri.p1);
+    PlaneEq edge1 = PlaneEq(VectorF(0), tri.p1, tri.p2);
+    PlaneEq edge2 = PlaneEq(VectorF(0), tri.p2, tri.p3);
+    PlaneEq edge3 = PlaneEq(VectorF(0), tri.p3, tri.p1);
+    edge1.d = 0; // assign to 0 because it helps optimization and it should already be 0
+    edge2.d = 0; // assign to 0 because it helps optimization and it should already be 0
+    edge3.d = 0; // assign to 0 because it helps optimization and it should already be 0
     if(edge1.eval(tri.p3) < 0)
     {
         edge1.normal = -edge1.normal;
@@ -65,13 +68,13 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
         //edge3.d = -edge3.d; // do nothing because d == 0
     }
 
-    PlaneEq uEquation = PlaneEq(Vector(0), tri.p1, tri.p2);
+    PlaneEq uEquation = PlaneEq(VectorF(0), tri.p1, tri.p2);
     {
         float divisor = uEquation.eval(tri.p3);
         uEquation.normal /= divisor;
         // uEquation.d == 0
     }
-    PlaneEq vEquation = PlaneEq(Vector(0), tri.p3, tri.p1);
+    PlaneEq vEquation = PlaneEq(VectorF(0), tri.p3, tri.p1);
     {
         float divisor = vEquation.eval(tri.p2);
         vEquation.normal /= divisor;
@@ -134,8 +137,8 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
     for(size_t y = startY; y <= endY; y++)
     {
         ColorI * imageLine = image->getLineAddress(y);
-        Vector startPixelCoords = Vector(0, y, -1);
-        Vector stepPixelCoords = Vector(1, 0, 0);
+        VectorF startPixelCoords = VectorF(0, y, -1);
+        VectorF stepPixelCoords = VectorF(1, 0, 0);
         float startInvZ = dot(plane.normal, startPixelCoords);
         float stepInvZ = dot(plane.normal, stepPixelCoords);
         float startEdge1V = dot(edge1.normal, startPixelCoords) + edge1.d * startInvZ;
@@ -156,6 +159,11 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
                 startX = (size_t)std::ceil(-startEdge1V / stepEdge1V);
             }
         }
+        else if(stepEdge1V == 0)
+        {
+            if(startEdge1V < 0)
+                continue;
+        }
         else // endEdge
         {
             if(startEdge1V < 0)
@@ -173,6 +181,11 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
             {
                 startX = (size_t)std::ceil(-startEdge2V / stepEdge2V);
             }
+        }
+        else if(stepEdge2V == 0)
+        {
+            if(startEdge2V < 0)
+                continue;
         }
         else // endEdge
         {
@@ -192,6 +205,11 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
                 startX = (size_t)std::ceil(-startEdge3V / stepEdge3V);
             }
         }
+        else if(stepEdge3V == 0)
+        {
+            if(startEdge3V < 0)
+                continue;
+        }
         else // endEdge
         {
             if(startEdge3V < 0)
@@ -208,19 +226,19 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
         startEdge2V += stepEdge2V * startX;
         startEdge3V += stepEdge3V * startX;
 
-        Vector pixelCoords = startPixelCoords;
+        VectorF pixelCoords = startPixelCoords;
         float invZ = startInvZ;
         for(size_t x = startX; x <= endX; x++, pixelCoords += stepPixelCoords, invZ += stepInvZ)
         {
             if(invZ < zBuffer[x + y * w])
                 continue;
 
-            Vector p = pixelCoords / invZ;
+            VectorF p = pixelCoords / invZ;
 
-            Vector triPos = Vector(uEquation.eval(p), vEquation.eval(p), 1);
-            Vector t1 = Vector(tri.t1.u, tri.t1.v, 1);
-            Vector t2 = Vector(tri.t2.u, tri.t2.v, 1);
-            Vector t3 = Vector(tri.t3.u, tri.t3.v, 1);
+            VectorF triPos = VectorF(uEquation.eval(p), vEquation.eval(p), 1);
+            VectorF t1 = VectorF(tri.t1.u, tri.t1.v, 1);
+            VectorF t2 = VectorF(tri.t2.u, tri.t2.v, 1);
+            VectorF t3 = VectorF(tri.t3.u, tri.t3.v, 1);
             float c1r = tri.c1.r;
             float c1g = tri.c1.g;
             float c1b = tri.c1.b;
@@ -233,7 +251,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
             float c3g = tri.c3.g;
             float c3b = tri.c3.b;
             float c3a = tri.c3.a;
-            Vector texturePos = triPos.x * (t3 - t1) + triPos.y * (t2 - t1) + t1;
+            VectorF texturePos = triPos.x * (t3 - t1) + triPos.y * (t2 - t1) + t1;
             ColorF c = RGBAF(triPos.x * (c3r - c1r) + triPos.y * (c2r - c1r) + c1r,
                              triPos.x * (c3g - c1g) + triPos.y * (c2g - c1g) + c1g,
                              triPos.x * (c3b - c1b) + triPos.y * (c2b - c1b) + c1b,

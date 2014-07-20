@@ -94,9 +94,9 @@ struct Matrix
      * @see #rotateX(double angle)
      * @see #rotateY(double angle)
      * @see #rotateZ(double angle) */
-    static Matrix rotate(const Vector axis, const double angle)
+    static Matrix rotate(const VectorF axis, const double angle)
     {
-        Vector axisv = normalize(axis);
+        VectorF axisv = normalize(axis);
         float c, s, v;
         c = cos(angle);
         s = sin(angle);
@@ -116,45 +116,45 @@ struct Matrix
 
 
     /** creates a rotation matrix<br/>
-     * the same as <code>Matrix::rotate(Vector(1, 0, 0), angle)</code>
+     * the same as <code>Matrix::rotate(VectorF(1, 0, 0), angle)</code>
      *
      * @param angle
      *            angle to rotate around the x axis in radians
      * @return the new rotation matrix
-     * @see #rotate(Vector axis, double angle)
+     * @see #rotate(VectorF axis, double angle)
      * @see #rotateY(double angle)
      * @see #rotateZ(double angle) */
     static Matrix rotateX(double angle)
     {
-        return rotate(Vector(1, 0, 0), angle);
+        return rotate(VectorF(1, 0, 0), angle);
     }
 
     /** creates a rotation matrix<br/>
-     * the same as <code>Matrix::rotate(Vector(0, 1, 0), angle)</code>
+     * the same as <code>Matrix::rotate(VectorF(0, 1, 0), angle)</code>
      *
      * @param angle
      *            angle to rotate around the y axis in radians
      * @return the new rotation matrix
-     * @see #rotate(Vector axis, double angle)
+     * @see #rotate(VectorF axis, double angle)
      * @see #rotateX(double angle)
      * @see #rotateZ(double angle) */
     static Matrix rotateY(double angle)
     {
-        return rotate(Vector(0, 1, 0), angle);
+        return rotate(VectorF(0, 1, 0), angle);
     }
 
     /** creates a rotation matrix<br/>
-     * the same as <code>Matrix::rotate(Vector(0, 0, 1), angle)</code>
+     * the same as <code>Matrix::rotate(VectorF(0, 0, 1), angle)</code>
      *
      * @param angle
      *            angle to rotate around the z axis in radians
      * @return the new rotation matrix
-     * @see #rotate(Vector axis, double angle)
+     * @see #rotate(VectorF axis, double angle)
      * @see #rotateX(double angle)
      * @see #rotateY(double angle) */
     static Matrix rotateZ(double angle)
     {
-        return rotate(Vector(0, 0, 1), angle);
+        return rotate(VectorF(0, 0, 1), angle);
     }
 
     /** creates a translation matrix
@@ -162,7 +162,7 @@ struct Matrix
      * @param position
      *            the position to translate (0, 0, 0) to
      * @return the new translation matrix */
-    constexpr static Matrix translate(Vector position)
+    constexpr static Matrix translate(VectorF position)
     {
         return Matrix(1,
                       0,
@@ -213,7 +213,7 @@ struct Matrix
      *            <code>s.y</code> is the amount to scale the y coordinate by.<br/>
      *            <code>s.z</code> is the amount to scale the z coordinate by.
      * @return the new scaling matrix */
-    constexpr static Matrix scale(Vector s)
+    constexpr static Matrix scale(VectorF s)
     {
         return Matrix(s.x, 0, 0, 0, 0, s.y, 0, 0, 0, 0, s.z, 0);
     }
@@ -302,17 +302,17 @@ struct Matrix
                                /* x33*/ x30 * rt.x03 + x31 * rt.x13 + x32 * rt.x23 + x33 * rt.x33);
     }
 
-    constexpr Vector apply(Vector v) const
+    constexpr VectorF apply(VectorF v) const
     {
-        return Vector(v.x * this->x00 + v.y * this->x10 + v.z * this->x20
+        return VectorF(v.x * this->x00 + v.y * this->x10 + v.z * this->x20
                       + this->x30, v.x * this->x01 + v.y * this->x11 + v.z * this->x21
                       + this->x31, v.x * this->x02 + v.y * this->x12 + v.z * this->x22
                       + this->x32);
     }
 
-    constexpr Vector applyNoTranslate(Vector v) const
+    constexpr VectorF applyNoTranslate(VectorF v) const
     {
-        return Vector(v.x * this->x00 + v.y * this->x10 + v.z * this->x20, v.x
+        return VectorF(v.x * this->x00 + v.y * this->x10 + v.z * this->x20, v.x
                                 * this->x01 + v.y * this->x11 + v.z * this->x21, v.x * this->x02
                                 + v.y * this->x12 + v.z * this->x22);
     }
@@ -324,12 +324,12 @@ struct Matrix
     }
 };
 
-constexpr Vector transform(const Matrix &m, Vector v)
+constexpr VectorF transform(const Matrix &m, VectorF v)
 {
     return m.apply(v);
 }
 
-inline Vector transformNormal(const Matrix &m, Vector v)
+inline VectorF transformNormal(const Matrix &m, VectorF v)
 {
     return normalizeNoThrow(transpose(inverse(m)).applyNoTranslate(v));
 }

@@ -269,7 +269,7 @@ struct Image
     {
     }
     Image(const Image &rt) = delete;
-    Image(Image  &&rt)
+    Image(Image &&rt)
         : w(rt.w), h(rt.h), pixels(rt.pixels), renderArgs(rt.renderArgs)
     {
         rt.w = 0;
@@ -481,6 +481,28 @@ struct Image
     VLineRange getVerticalLine(int x)
     {
         return getVerticalLine(x, 0, h);
+    }
+};
+
+struct TextureDescriptor
+{
+    shared_ptr<Image> image;
+    float minU, minV, maxU, maxV;
+    TextureDescriptor(shared_ptr<Image> image = nullptr)
+        : image(image), minU(0), minV(0), maxU(1), maxV(1)
+    {
+    }
+    TextureDescriptor(shared_ptr<Image> image, float minU, float maxU, float minV, float maxV)
+        : image(image), minU(0), minV(0), maxU(1), maxV(1)
+    {
+    }
+    operator bool() const
+    {
+        return image != nullptr;
+    }
+    bool operator !() const
+    {
+        return image == nullptr;
     }
 };
 

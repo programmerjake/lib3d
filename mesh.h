@@ -56,7 +56,7 @@ struct Mesh
 {
     vector<Triangle> triangles;
     shared_ptr<Image> image;
-    Mesh(vector<Triangle> triangles, shared_ptr<Image> image = nullptr)
+    Mesh(vector<Triangle> triangles = vector<Triangle>(), shared_ptr<Image> image = nullptr)
         : triangles(std::move(triangles)), image(image)
     {
     }

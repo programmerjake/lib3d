@@ -37,6 +37,7 @@
 		<Linker>
 			<Add option="`sdl2-config --libs`" />
 		</Linker>
+		<Unit filename="generate.h" />
 		<Unit filename="image.h" />
 		<Unit filename="main.cpp" />
 		<Unit filename="matrix.h" />

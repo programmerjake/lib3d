@@ -24,46 +24,46 @@ struct TextureCoord
 struct Triangle
 {
     TextureCoord t1, t2, t3;
-    Vector p1, p2, p3;
+    VectorF p1, p2, p3;
     ColorF c1, c2, c3;
-    Vector n1, n2, n3;
-    constexpr Triangle(Vector p1, Vector p2, Vector p3, ColorF color = RGBAF(1, 1, 1, 1))
+    VectorF n1, n2, n3;
+    constexpr Triangle(VectorF p1, VectorF p2, VectorF p3, ColorF color = RGBAF(1, 1, 1, 1))
         : t1(0, 0), t2(0, 0), t3(0, 0), p1(p1), p2(p2), p3(p3), c1(color), c2(color), c3(color), n1(normalizeNoThrow(cross(p1 - p2, p1 - p3))), n2(normalizeNoThrow(cross(p1 - p2, p1 - p3))), n3(normalizeNoThrow(cross(p1 - p2, p1 - p3)))
     {
     }
-    constexpr Triangle(Vector p1, TextureCoord t1, Vector p2, TextureCoord t2, Vector p3, TextureCoord t3, ColorF color = RGBAF(1, 1, 1, 1))
+    constexpr Triangle(VectorF p1, TextureCoord t1, VectorF p2, TextureCoord t2, VectorF p3, TextureCoord t3, ColorF color = RGBAF(1, 1, 1, 1))
         : t1(t1), t2(t2), t3(t3), p1(p1), p2(p2), p3(p3), c1(color), c2(color), c3(color), n1(normalizeNoThrow(cross(p1 - p2, p1 - p3))), n2(normalizeNoThrow(cross(p1 - p2, p1 - p3))), n3(normalizeNoThrow(cross(p1 - p2, p1 - p3)))
     {
     }
-    constexpr Triangle(Vector p1, ColorF c1, Vector p2, ColorF c2, Vector p3, ColorF c3)
+    constexpr Triangle(VectorF p1, ColorF c1, VectorF p2, ColorF c2, VectorF p3, ColorF c3)
         : t1(0, 0), t2(0, 0), t3(0, 0), p1(p1), p2(p2), p3(p3), c1(c1), c2(c2), c3(c3), n1(normalizeNoThrow(cross(p1 - p2, p1 - p3))), n2(normalizeNoThrow(cross(p1 - p2, p1 - p3))), n3(normalizeNoThrow(cross(p1 - p2, p1 - p3)))
     {
     }
-    constexpr Triangle(Vector p1, TextureCoord t1, ColorF c1, Vector p2, TextureCoord t2, ColorF c2, Vector p3, TextureCoord t3, ColorF c3)
+    constexpr Triangle(VectorF p1, TextureCoord t1, ColorF c1, VectorF p2, TextureCoord t2, ColorF c2, VectorF p3, TextureCoord t3, ColorF c3)
         : t1(t1), t2(t2), t3(t3), p1(p1), p2(p2), p3(p3), c1(c1), c2(c2), c3(c3), n1(normalizeNoThrow(cross(p1 - p2, p1 - p3))), n2(normalizeNoThrow(cross(p1 - p2, p1 - p3))), n3(normalizeNoThrow(cross(p1 - p2, p1 - p3)))
     {
     }
-    constexpr Triangle(Vector p1, ColorF c1, TextureCoord t1, Vector p2, ColorF c2, TextureCoord t2, Vector p3, ColorF c3, TextureCoord t3)
+    constexpr Triangle(VectorF p1, ColorF c1, TextureCoord t1, VectorF p2, ColorF c2, TextureCoord t2, VectorF p3, ColorF c3, TextureCoord t3)
         : t1(t1), t2(t2), t3(t3), p1(p1), p2(p2), p3(p3), c1(c1), c2(c2), c3(c3), n1(normalizeNoThrow(cross(p1 - p2, p1 - p3))), n2(normalizeNoThrow(cross(p1 - p2, p1 - p3))), n3(normalizeNoThrow(cross(p1 - p2, p1 - p3)))
     {
     }
-    constexpr Triangle(Vector p1, Vector n1, Vector p2, Vector n2, Vector p3, Vector n3, ColorF color = RGBAF(1, 1, 1, 1))
+    constexpr Triangle(VectorF p1, VectorF n1, VectorF p2, VectorF n2, VectorF p3, VectorF n3, ColorF color = RGBAF(1, 1, 1, 1))
         : t1(0, 0), t2(0, 0), t3(0, 0), p1(p1), p2(p2), p3(p3), c1(color), c2(color), c3(color), n1(n1), n2(n2), n3(n3)
     {
     }
-    constexpr Triangle(Vector p1, TextureCoord t1, Vector n1, Vector p2, TextureCoord t2, Vector n2, Vector p3, TextureCoord t3, Vector n3, ColorF color = RGBAF(1, 1, 1, 1))
+    constexpr Triangle(VectorF p1, TextureCoord t1, VectorF n1, VectorF p2, TextureCoord t2, VectorF n2, VectorF p3, TextureCoord t3, VectorF n3, ColorF color = RGBAF(1, 1, 1, 1))
         : t1(t1), t2(t2), t3(t3), p1(p1), p2(p2), p3(p3), c1(color), c2(color), c3(color), n1(n1), n2(n2), n3(n3)
     {
     }
-    constexpr Triangle(Vector p1, ColorF c1, Vector n1, Vector p2, ColorF c2, Vector n2, Vector p3, ColorF c3, Vector n3)
+    constexpr Triangle(VectorF p1, ColorF c1, VectorF n1, VectorF p2, ColorF c2, VectorF n2, VectorF p3, ColorF c3, VectorF n3)
         : t1(0, 0), t2(0, 0), t3(0, 0), p1(p1), p2(p2), p3(p3), c1(c1), c2(c2), c3(c3), n1(n1), n2(n2), n3(n3)
     {
     }
-    constexpr Triangle(Vector p1, TextureCoord t1, ColorF c1, Vector n1, Vector p2, TextureCoord t2, ColorF c2, Vector n2, Vector p3, TextureCoord t3, ColorF c3, Vector n3)
+    constexpr Triangle(VectorF p1, TextureCoord t1, ColorF c1, VectorF n1, VectorF p2, TextureCoord t2, ColorF c2, VectorF n2, VectorF p3, TextureCoord t3, ColorF c3, VectorF n3)
         : t1(t1), t2(t2), t3(t3), p1(p1), p2(p2), p3(p3), c1(c1), c2(c2), c3(c3), n1(n1), n2(n2), n3(n3)
     {
     }
-    constexpr Triangle(Vector p1, ColorF c1, TextureCoord t1, Vector n1, Vector p2, ColorF c2, TextureCoord t2, Vector n2, Vector p3, ColorF c3, TextureCoord t3, Vector n3)
+    constexpr Triangle(VectorF p1, ColorF c1, TextureCoord t1, VectorF n1, VectorF p2, ColorF c2, TextureCoord t2, VectorF n2, VectorF p3, ColorF c3, TextureCoord t3, VectorF n3)
         : t1(t1), t2(t2), t3(t3), p1(p1), p2(p2), p3(p3), c1(c1), c2(c2), c3(c3), n1(n1), n2(n2), n3(n3)
     {
     }
