@@ -1,5 +1,6 @@
 #include "softrender.h"
 #include <utility>
+#include <iostream>
 
 using namespace std;
 
@@ -7,7 +8,7 @@ namespace
 {
 inline VectorF gridify(VectorF v)
 {
-    constexpr float gridSize = 1e-2;
+    constexpr float gridSize = 1 / 128.0;
     constexpr float invGridSize = 1 / gridSize;
     return VectorF(std::floor(v.x * invGridSize + 0.5) * gridSize, std::floor(v.y * invGridSize + 0.5) * gridSize, std::floor(v.z * invGridSize + 0.5) * gridSize);
 }
@@ -52,21 +53,6 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
     edge1.d = 0; // assign to 0 because it helps optimization and it should already be 0
     edge2.d = 0; // assign to 0 because it helps optimization and it should already be 0
     edge3.d = 0; // assign to 0 because it helps optimization and it should already be 0
-    if(edge1.eval(tri.p3) < 0)
-    {
-        edge1.normal = -edge1.normal;
-        //edge1.d = -edge1.d; // do nothing because d == 0
-    }
-    if(edge2.eval(tri.p1) < 0)
-    {
-        edge2.normal = -edge2.normal;
-        //edge2.d = -edge2.d; // do nothing because d == 0
-    }
-    if(edge3.eval(tri.p2) < 0)
-    {
-        edge3.normal = -edge3.normal;
-        //edge3.d = -edge3.d; // do nothing because d == 0
-    }
 
     PlaneEq uEquation = PlaneEq(VectorF(0), tri.p1, tri.p2);
     {
@@ -218,6 +204,14 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
             {
                 endX = (size_t)std::ceil(-startEdge3V / stepEdge3V) - 1;
             }
+        }
+
+        if(startX == 0 || endX == w - 1)
+        {
+            cout << "\x1b[s\x1b[H\n\n\n\n" << w << "x" << h << " : Triangle(\x1b[K\n";
+            cout << "VectorF(" << triangleIn.p1.x << ", " << triangleIn.p1.y << ", " << triangleIn.p1.z << "), TextureCoord(" << triangleIn.t1.u << ", " << triangleIn.t1.v << "), RGBAF(" << triangleIn.c1.r << ", " << triangleIn.c1.g << ", " << triangleIn.c1.b << ", " << triangleIn.c1.a << "), VectorF(" << triangleIn.n1.x << ", " << triangleIn.n1.y << ", " << triangleIn.n1.z << "),\x1b[K\n";
+            cout << "VectorF(" << triangleIn.p2.x << ", " << triangleIn.p2.y << ", " << triangleIn.p2.z << "), TextureCoord(" << triangleIn.t2.u << ", " << triangleIn.t2.v << "), RGBAF(" << triangleIn.c2.r << ", " << triangleIn.c2.g << ", " << triangleIn.c2.b << ", " << triangleIn.c2.a << "), VectorF(" << triangleIn.n2.x << ", " << triangleIn.n2.y << ", " << triangleIn.n2.z << "),\x1b[K\n";
+            cout << "VectorF(" << triangleIn.p3.x << ", " << triangleIn.p3.y << ", " << triangleIn.p3.z << "), TextureCoord(" << triangleIn.t3.u << ", " << triangleIn.t3.v << "), RGBAF(" << triangleIn.c3.r << ", " << triangleIn.c3.g << ", " << triangleIn.c3.b << ", " << triangleIn.c3.a << "), VectorF(" << triangleIn.n3.x << ", " << triangleIn.n3.y << ", " << triangleIn.n3.z << "))\x1b[K\x1b[u" << flush;
         }
 
         startPixelCoords += stepPixelCoords * startX;

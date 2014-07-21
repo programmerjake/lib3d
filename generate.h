@@ -20,6 +20,9 @@
 
 #include "mesh.h"
 #include <utility>
+#include <functional>
+
+using namespace std;
 
 inline Mesh reverse(const Mesh & meshIn)
 {
@@ -28,6 +31,28 @@ inline Mesh reverse(const Mesh & meshIn)
     {
         tri = reverse(tri);
     }
+    return Mesh(std::move(triangles), meshIn.image);
+}
+
+inline Mesh shadeMesh(const Mesh &meshIn, function<ColorF(ColorF vertexColor, VectorF vertexNormal, VectorF vertexPosition)> shadeFn)
+{
+    vector<Triangle> triangles;
+    triangles.reserve(meshIn.triangles.size());
+
+    for(Triangle tri : meshIn.triangles)
+    {
+        if(tri.n1 == VectorF(0) || tri.n2 == VectorF(0) || tri.n3 == VectorF(0))
+        {
+            triangles.push_back(tri);
+            continue;
+        }
+
+        tri.c1 = shadeFn(tri.c1, tri.n1, tri.p1);
+        tri.c2 = shadeFn(tri.c2, tri.n2, tri.p2);
+        tri.c3 = shadeFn(tri.c3, tri.n3, tri.p3);
+        triangles.push_back(tri);
+    }
+
     return Mesh(std::move(triangles), meshIn.image);
 }
 

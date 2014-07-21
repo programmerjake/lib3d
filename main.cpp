@@ -6,11 +6,12 @@
 using namespace std;
 
 template <typename T>
-shared_ptr<Mesh> makeRandomMesh(T & randomGenerator, size_t count)
+shared_ptr<Mesh> makeRandomMesh(T &randomGenerator, size_t count)
 {
     std::uniform_real_distribution<float> pointDistribution(-10, 10), colorDistribution(0, 1);
     vector<Triangle> triangles;
     triangles.reserve(count);
+
     for(size_t i = 0; i < count; i++)
     {
         float x1 = pointDistribution(randomGenerator);
@@ -30,6 +31,7 @@ shared_ptr<Mesh> makeRandomMesh(T & randomGenerator, size_t count)
         ColorF c3 = HSBF(colorDistribution(randomGenerator), 1, 0.5);
         triangles.push_back(Triangle(p1, c1, p2, c2, p3, c3));
     }
+
     return make_shared<Mesh>(std::move(triangles));
 }
 
@@ -42,6 +44,7 @@ shared_ptr<Mesh> makeSphereMesh(size_t uCount, size_t vCount, float r, shared_pt
 {
     vector<Triangle> triangles;
     triangles.reserve(uCount * vCount * 2);
+
     for(size_t ui = 0; ui < uCount; ui++)
     {
         for(size_t vi = 0; vi < vCount; vi++)
@@ -58,55 +61,66 @@ shared_ptr<Mesh> makeSphereMesh(size_t uCount, size_t vCount, float r, shared_pt
             triangles.push_back(Triangle(p00 * r, t00, p00, p11 * r, t11, p11, p10 * r, t10, p10, color));
         }
     }
+
     return make_shared<Mesh>(triangles, image);
 }
 
-inline Mesh shadeMesh(const Mesh & meshIn, VectorF lightDir)
+inline ColorF shadeFn(ColorF vColor, VectorF vNormal, VectorF vPosition)
 {
-    lightDir = normalize(lightDir);
-    vector<Triangle> triangles;
-    triangles.reserve(meshIn.triangles.size());
-    for(Triangle tri : meshIn.triangles)
-    {
-        if(tri.n1 == VectorF(0) || tri.n2 == VectorF(0) || tri.n3 == VectorF(0))
-        {
-            triangles.push_back(tri);
-            continue;
-        }
-        tri.c1 = scaleF(tri.c1, std::max<float>(0, dot(tri.n1, lightDir)) * 0.65 + 0.35);
-        tri.c2 = scaleF(tri.c2, std::max<float>(0, dot(tri.n2, lightDir)) * 0.65 + 0.35);
-        tri.c3 = scaleF(tri.c3, std::max<float>(0, dot(tri.n3, lightDir)) * 0.65 + 0.35);
-        triangles.push_back(tri);
-    }
-    return Mesh(std::move(triangles), meshIn.image);
+    constexpr VectorF lightVector = normalizeNoThrow(VectorF(1, 1, 1));
+    constexpr VectorF specularLightVector = normalizeNoThrow(lightVector + VectorF(0, 0, 1));
+    float v = 0.3;
+    v += max<float>(0, dot(vNormal, lightVector)) * 0.4;
+    float s = max<float>(0, dot(vNormal, specularLightVector));
+    s *= s;
+    s *= s;
+    s *= s;
+    s *= s;
+    v += s * 0;
+    return scaleF(min<float>(1, v), vColor);
 }
 
 int main()
 {
     shared_ptr<WindowRenderer> renderer = getWindowRenderer();
     minstd_rand0 randomGenerator;
-    shared_ptr<Mesh> m = makeRandomMesh(randomGenerator, 5);
+    shared_ptr<Mesh> m = makeRandomMesh(randomGenerator, 20);
     m->append(reverse(*m));
-    shared_ptr<Mesh> m2 = makeSphereMesh(32, 32, 5);
-    TextureDescriptor td(make_shared<Image>());
-    if(false)
-        m2 = (shared_ptr<Mesh>)transform(Matrix::translate(VectorF(-0.5)).concat(Matrix::scale(2 * 3.5)), Generate::unitBox(td, td, td, td, td, td));
+    shared_ptr<Mesh> m2;
+    shared_ptr<ImageRenderer> imageRenderer;
+
+    if(true)
+    {
+        TextureDescriptor td(make_shared<Image>());
+        m2 = (shared_ptr<Mesh>)transform(Matrix::translate(VectorF(-0.5)).concat(Matrix::scale(2 * 10)), Generate::unitBox(td, td, td, td, td, td));
+        m2->image = nullptr;
+        imageRenderer = makeImageRenderer(256, 256);
+    }
+    else
+    {
+        m2 = makeSphereMesh(24, 12, 16);
+        imageRenderer = makeImageRenderer(512, 256);
+    }
+
     double startTime = timer();
-    shared_ptr<ImageRenderer> imageRenderer = makeImageRenderer(256, 256);
+
     while(true)
     {
         double time = timer();
-        Matrix tform = (Matrix::rotateY((time - startTime) / 2 * M_PI)).concat(Matrix::translate(0, 0, -19));
+        Matrix tform = (Matrix::rotateY((time - startTime) / 2 * M_PI)).concat(Matrix::translate(0, 0, -30));
         renderer->clear();
-#if 1
+#if 0
         imageRenderer->clear(RGBF(1, 1, 1));
         imageRenderer->render((Mesh)transform(tform, m));
         shared_ptr<Image> image = imageRenderer->finish();
-        tform = (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::translate(0, 0, -10));
+        tform = (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::translate(0, 0, -30));
         m2->image = image;
-        renderer->render(shadeMesh(transform(tform, m2), VectorF(1, 1, 1)));
+        renderer->render(shadeMesh(transform(tform, m2), shadeFn));
 #else
-        renderer->render(shadeMesh(transform(tform, m), VectorF(1, 1, 1)));
+        Mesh containerMesh = shadeMesh(colorize(RGBAF(1, 1, 1, 0.3), transform(tform, m2)), shadeFn);
+        renderer->render(reverse(containerMesh));
+        renderer->render(shadeMesh(transform(tform, m), shadeFn));
+        renderer->render(containerMesh);
 #endif
         renderer->flip();
     }

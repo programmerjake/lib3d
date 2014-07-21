@@ -89,7 +89,7 @@ constexpr Triangle colorize(ColorF color, const Triangle & t)
 
 constexpr Triangle reverse(const Triangle & t)
 {
-    return Triangle(t.p1, t.t1, t.c1, t.n1, t.p3, t.t3, t.c3, t.n3, t.p2, t.t2, t.c2, t.n2);
+    return Triangle(t.p1, t.t1, t.c1, -t.n1, t.p3, t.t3, t.c3, -t.n3, t.p2, t.t2, t.c2, -t.n2);
 }
 
 #endif // TRIANGLE_H_INCLUDED
