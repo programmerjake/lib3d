@@ -1,10 +1,13 @@
 #include "renderer.h"
 #include "softrender.h"
+#include "libaarenderer.h"
+#include "cacarenderer.h"
 #include <SDL.h>
 #include <stdexcept>
 #include <cstdlib>
 #include <cassert>
 #include <iostream>
+#include <string>
 
 using namespace std;
 
@@ -139,8 +142,7 @@ class OpenGLWindowRenderer : public WindowRenderer
 {
 private:
     SDL_Window * window;
-    SDL_Texture * texture;
-    SDL_Renderer * sdlRenderer;
+    SDL_GLContext * glContext;
     shared_ptr<ImageRenderer> imageRenderer;
     size_t w, h;
 public:
@@ -246,10 +248,90 @@ public:
 };
 #endif
 
-shared_ptr<WindowRenderer> makeWindowRenderer()
+shared_ptr<ImageRenderer> makeSoftwareImageRenderer(size_t w, size_t h, float aspectRatio)
+{
+    return make_shared<SoftwareRenderer>(w, h, aspectRatio);
+}
+
+struct Driver
+{
+    string name;
+    function<shared_ptr<WindowRenderer>()> makeWindowRenderer;
+    function<shared_ptr<ImageRenderer>(size_t w, size_t h, float aspectRatio)> makeImageRenderer;
+    Driver(string name, function<shared_ptr<WindowRenderer>()> makeWindowRenderer, function<shared_ptr<ImageRenderer>(size_t w, size_t h, float aspectRatio)> makeImageRenderer)
+        : name(name), makeWindowRenderer(makeWindowRenderer), makeImageRenderer(makeImageRenderer)
+    {
+    }
+    shared_ptr<WindowRenderer> start() const
+    {
+        try
+        {
+            return makeWindowRenderer();
+        }
+        catch(exception & e)
+        {
+            cout << "lib3d : can't start " << name << " : " << e.what() << endl;
+        }
+        return nullptr;
+    }
+};
+
+const Driver drivers[] =
 {
     #warning finish adding OpenGL
-    return make_shared<SDLWindowRenderer>();
+    Driver("sdl", []()->shared_ptr<WindowRenderer>{return make_shared<SDLWindowRenderer>();}, makeSoftwareImageRenderer),
+    Driver("caca", makeCacaRenderer, makeSoftwareImageRenderer),
+    Driver("aalib", makeLibAARenderer, makeSoftwareImageRenderer),
+};
+
+constexpr int driverCount = sizeof(drivers) / sizeof(drivers[0]);
+
+int driverIndex = -1;
+
+string getDriverEnvVar()
+{
+    const char * retval = getenv("LIB3D_DRIVER");
+    if(retval == nullptr)
+        return "";
+    return retval;
+}
+
+shared_ptr<WindowRenderer> makeWindowRenderer()
+{
+    string driver = getDriverEnvVar();
+    shared_ptr<WindowRenderer> retval = nullptr;
+    if(driver != "")
+    {
+        bool found = false;
+        for(int i = 0; i < driverCount; i++)
+        {
+            if(drivers[i].name == driver)
+            {
+                found = true;
+                retval = drivers[i].start();
+                if(retval != nullptr)
+                {
+                    driverIndex = i;
+                    return retval;
+                }
+                break;
+            }
+        }
+        if(!found)
+            cout << "lib3d : can't find driver : " << driver << endl;
+    }
+    for(int i = 0; i < driverCount; i++)
+    {
+        retval = drivers[i].start();
+        if(retval != nullptr)
+        {
+            driverIndex = i;
+            return retval;
+        }
+    }
+    cout << "lib3d : can't start any drivers\n";
+    exit(1);
+    return nullptr;
 }
 }
 
@@ -261,8 +343,9 @@ shared_ptr<WindowRenderer> getWindowRenderer()
     return theWindowRenderer;
 }
 
-shared_ptr<ImageRenderer> makeImageRenderer(size_t w, size_t h)
+shared_ptr<ImageRenderer> makeImageRenderer(size_t w, size_t h, float aspectRatio)
 {
-    #warning finish adding OpenGL
-    return make_shared<SoftwareRenderer>(w, h);
+    if(driverIndex == -1)
+        return make_shared<SoftwareRenderer>(w, h, aspectRatio);
+    return drivers[driverIndex].makeImageRenderer(w, h, aspectRatio);
 }

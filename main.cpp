@@ -117,6 +117,7 @@ int main()
         m2->image = image;
         renderer->render(shadeMesh(transform(tform, m2), shadeFn));
 #else
+        tform = (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::translate(0, 0, -30));
         Mesh containerMesh = shadeMesh(colorize(RGBAF(1, 1, 1, 0.3), transform(tform, m2)), shadeFn);
         renderer->render(reverse(containerMesh));
         renderer->render(shadeMesh(transform(tform, m), shadeFn));

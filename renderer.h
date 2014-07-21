@@ -54,9 +54,22 @@ protected:
             onSetFPS();
         }
     }
-    void calcScales(size_t w, size_t h)
+    void calcScales(size_t w, size_t h, float aspectRatio = -1)
     {
-        if(w > h)
+        if(aspectRatio > 0)
+        {
+            if(aspectRatio > 1)
+            {
+                scaleXValue = aspectRatio;
+                scaleYValue = 1;
+            }
+            else
+            {
+                scaleXValue = 1;
+                scaleYValue = 1 / aspectRatio;
+            }
+        }
+        else if(w > h)
         {
             scaleXValue = (float)w / h;
             scaleYValue = 1;
@@ -96,10 +109,10 @@ struct WindowRenderer : public Renderer
 struct ImageRenderer : public Renderer
 {
     virtual shared_ptr<Image> finish() = 0;
-    virtual void resize(size_t newW, size_t newH) = 0;
+    virtual void resize(size_t newW, size_t newH, float newAspectRatio = -1) = 0;
 };
 
 shared_ptr<WindowRenderer> getWindowRenderer();
-shared_ptr<ImageRenderer> makeImageRenderer(size_t w, size_t h);
+shared_ptr<ImageRenderer> makeImageRenderer(size_t w, size_t h, float aspectRatio = -1);
 
 #endif // RENDERER_H_INCLUDED

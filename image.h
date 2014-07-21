@@ -74,6 +74,11 @@ constexpr int getBValueI(ColorI c)
     return c.b;
 }
 
+constexpr int getLuminanceValueI(ColorI c)
+{
+    return (int)(((uint_fast32_t)c.r * 13988 + (uint_fast32_t)c.g * 47055 + (uint_fast32_t)c.b * 4750) >> 16);
+}
+
 template <typename T>
 constexpr const T & limit(const T & v, const T & minimum, const T & maximum)
 {
@@ -142,6 +147,11 @@ constexpr float getGValueF(ColorF c)
 constexpr float getBValueF(ColorF c)
 {
     return c.b;
+}
+
+constexpr float getLuminanceValueF(ColorF c)
+{
+    return 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 }
 
 constexpr ColorF compose(ColorF fg, ColorF bg)

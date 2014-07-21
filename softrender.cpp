@@ -29,15 +29,10 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
     triangle.texture = texture;
     Triangle &tri = triangle.tri;
     size_t w = image->w, h = image->h;
-    float scale;
-    if(w < h)
-        scale = w * 0.5;
-    else
-        scale = h * 0.5;
     float centerX = 0.5 * w;
     float centerY = 0.5 * h;
-    Matrix transformToScreen(scale, 0, -centerX, -0.5,
-                             0, -scale, -centerY, -0.5,
+    Matrix transformToScreen(w * 0.5 / scaleX(), 0, -centerX, -0.5,
+                             0, h * -0.5 / scaleY(), -centerY, -0.5,
                              0, 0, 1, 0);
     tri = transform(transformToScreen, gridify(triangleIn));
     if(tri.p1.z >= 0 && tri.p2.z >= 0 && tri.p3.z >= 0)

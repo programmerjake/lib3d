@@ -50,9 +50,10 @@ private:
     bool writeDepth = true;
     enum {NoTexture = ~(size_t)0};
     void renderTriangle(Triangle triangleIn, shared_ptr<Image> texture);
+    float aspectRatio;
 public:
-    SoftwareRenderer(size_t w, size_t h)
-        : image(make_shared<Image>(w, h)), whiteTexture(make_shared<Image>(RGBI(0xFF, 0xFF, 0xFF)))
+    SoftwareRenderer(size_t w, size_t h, float aspectRatio = -1)
+        : image(make_shared<Image>(w, h)), whiteTexture(make_shared<Image>(RGBI(0xFF, 0xFF, 0xFF))), aspectRatio(aspectRatio)
     {
         zBuffer.assign(w * h, (const float &)(float)0);
         tBuffer.assign(w * h, (const size_t &)NoTexture);
@@ -60,7 +61,7 @@ public:
     virtual void render(const Mesh & m) override;
     virtual void calcScales() override
     {
-        Renderer::calcScales(image->w, image->h);
+        Renderer::calcScales(image->w, image->h, aspectRatio);
     }
 protected:
     virtual void clearInternal(ColorF bg)
@@ -76,11 +77,12 @@ public:
     {
         writeDepth = v;
     }
-    virtual void resize(size_t w, size_t h) override
+    virtual void resize(size_t newW, size_t newH, float newAspectRatio = -1) override
     {
-        image = make_shared<Image>(w, h);
-        zBuffer.assign(w * h, (const float &)(float)0);
-        tBuffer.assign(w * h, (const size_t &)NoTexture);
+        image = make_shared<Image>(newW, newH);
+        zBuffer.assign(newW * newH, (const float &)(float)0);
+        tBuffer.assign(newW * newH, (const size_t &)NoTexture);
+        aspectRatio = newAspectRatio;
     }
 };
 
