@@ -109,7 +109,7 @@ int main()
         double time = timer();
         Matrix tform = (Matrix::rotateY((time - startTime) / 2 * M_PI)).concat(Matrix::translate(0, 0, -30));
         renderer->clear();
-#if 0
+#if 1
         imageRenderer->clear(RGBF(1, 1, 1));
         imageRenderer->render((Mesh)transform(tform, m));
         shared_ptr<Image> image = imageRenderer->finish();

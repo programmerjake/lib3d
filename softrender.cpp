@@ -267,8 +267,6 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
             pixel = compose(fragmentColor, pixel);
         }
     }
-
-#warning finish
 }
 
 void SoftwareRenderer::render(const Mesh &m)
@@ -288,7 +286,6 @@ void SoftwareRenderer::render(const Mesh &m)
 
 shared_ptr<Image> SoftwareRenderer::finish()
 {
-#warning finish
     return image;
 }
 

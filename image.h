@@ -259,7 +259,7 @@ struct Image
 {
     size_t w, h;
     ColorI *pixels;
-    mutable shared_ptr<void> renderArgs;
+    mutable shared_ptr<void> glProperties;
     Image(size_t w, size_t h, ColorI *pixels = nullptr)
         : w(w), h(h), pixels(pixels)
     {
@@ -280,12 +280,12 @@ struct Image
     }
     Image(const Image &rt) = delete;
     Image(Image &&rt)
-        : w(rt.w), h(rt.h), pixels(rt.pixels), renderArgs(rt.renderArgs)
+        : w(rt.w), h(rt.h), pixels(rt.pixels), glProperties(rt.glProperties)
     {
         rt.w = 0;
         rt.h = 0;
         rt.pixels = nullptr;
-        rt.renderArgs = nullptr;
+        rt.glProperties = nullptr;
     }
     ~Image()
     {
@@ -297,7 +297,7 @@ struct Image
         std::swap(w, rt.w);
         std::swap(h, rt.h);
         std::swap(pixels, rt.pixels);
-        std::swap(renderArgs, rt.renderArgs);
+        std::swap(glProperties, rt.glProperties);
         return *this;
     }
     operator bool() const
