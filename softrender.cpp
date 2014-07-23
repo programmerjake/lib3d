@@ -22,7 +22,7 @@ inline Triangle gridify(Triangle tri)
 }
 }
 
-void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> texture)
+void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<const Image> texture)
 {
     triangles.push_back(TriangleDescriptor());
     TriangleDescriptor &triangle = triangles.back();
@@ -62,7 +62,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
         // vEquation.d == 0
     }
 
-    ColorI * texturePixels = texture->pixels;
+    const ColorI * texturePixels = texture->getPixels();
     size_t textureW = texture->w;
     size_t textureH = texture->h;
 
@@ -201,14 +201,6 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
             }
         }
 
-        if(startX == 0 || endX == w - 1)
-        {
-            cout << "\x1b[s\x1b[H\n\n\n\n" << w << "x" << h << " : Triangle(\x1b[K\n";
-            cout << "VectorF(" << triangleIn.p1.x << ", " << triangleIn.p1.y << ", " << triangleIn.p1.z << "), TextureCoord(" << triangleIn.t1.u << ", " << triangleIn.t1.v << "), RGBAF(" << triangleIn.c1.r << ", " << triangleIn.c1.g << ", " << triangleIn.c1.b << ", " << triangleIn.c1.a << "), VectorF(" << triangleIn.n1.x << ", " << triangleIn.n1.y << ", " << triangleIn.n1.z << "),\x1b[K\n";
-            cout << "VectorF(" << triangleIn.p2.x << ", " << triangleIn.p2.y << ", " << triangleIn.p2.z << "), TextureCoord(" << triangleIn.t2.u << ", " << triangleIn.t2.v << "), RGBAF(" << triangleIn.c2.r << ", " << triangleIn.c2.g << ", " << triangleIn.c2.b << ", " << triangleIn.c2.a << "), VectorF(" << triangleIn.n2.x << ", " << triangleIn.n2.y << ", " << triangleIn.n2.z << "),\x1b[K\n";
-            cout << "VectorF(" << triangleIn.p3.x << ", " << triangleIn.p3.y << ", " << triangleIn.p3.z << "), TextureCoord(" << triangleIn.t3.u << ", " << triangleIn.t3.v << "), RGBAF(" << triangleIn.c3.r << ", " << triangleIn.c3.g << ", " << triangleIn.c3.b << ", " << triangleIn.c3.a << "), VectorF(" << triangleIn.n3.x << ", " << triangleIn.n3.y << ", " << triangleIn.n3.z << "))\x1b[K\x1b[u" << flush;
-        }
-
         startPixelCoords += stepPixelCoords * startX;
         startInvZ += stepInvZ * startX;
         startEdge1V += stepEdge1V * startX;
@@ -271,12 +263,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<Image> tex
 
 void SoftwareRenderer::render(const Mesh &m)
 {
-    shared_ptr<Image> texture = m.image;
-
-    if(texture == nullptr)
-    {
-        texture = whiteTexture;
-    }
+    shared_ptr<const Image> texture = ((m.image != nullptr) ? m.image->getImage() : whiteTexture);
 
     for(Triangle tri : m.triangles)
     {
@@ -284,8 +271,8 @@ void SoftwareRenderer::render(const Mesh &m)
     }
 }
 
-shared_ptr<Image> SoftwareRenderer::finish()
+shared_ptr<Texture> SoftwareRenderer::finish()
 {
-    return image;
+    return imageTexture;
 }
 

@@ -7,6 +7,7 @@
 #include <iterator>
 #include <cassert>
 #include <cmath>
+#include <string>
 
 using namespace std;
 
@@ -258,7 +259,17 @@ inline ColorF HSBF(float H, float S, float B)
 struct Image
 {
     size_t w, h;
+private:
     ColorI *pixels;
+public:
+    ColorI *getPixels()
+    {
+        return pixels;
+    }
+    const ColorI *getPixels() const
+    {
+        return pixels;
+    }
     mutable shared_ptr<void> glProperties;
     Image(size_t w, size_t h, ColorI *pixels = nullptr)
         : w(w), h(h), pixels(pixels)
@@ -278,7 +289,16 @@ struct Image
         : Image(0, 0)
     {
     }
-    Image(const Image &rt) = delete;
+    Image(const Image &rt)
+        : w(rt.w), h(rt.h), pixels(nullptr), glProperties(nullptr)
+    {
+        if(w > 0 && h > 0)
+        {
+            pixels = new ColorI[w * h];
+            for(size_t i = 0; i < w * h; i++)
+                pixels[i] = rt.pixels[i];
+        }
+    }
     Image(Image &&rt)
         : w(rt.w), h(rt.h), pixels(rt.pixels), glProperties(rt.glProperties)
     {
@@ -291,7 +311,22 @@ struct Image
     {
         delete []pixels;
     }
-    const Image &operator =(const Image &rt) = delete;
+    const Image &operator =(const Image &rt)
+    {
+        if(pixels != nullptr && pixels == rt.pixels)
+            return *this;
+        if(pixels != nullptr)
+            delete []pixels;
+        w = rt.w;
+        h = rt.h;
+        if(w > 0 && h > 0)
+        {
+            pixels = new ColorI[w * h];
+            for(size_t i = 0; i < w * h; i++)
+                pixels[i] = rt.pixels[i];
+        }
+        return *this;
+    }
     const Image &operator =(Image && rt)
     {
         std::swap(w, rt.w);
@@ -317,7 +352,7 @@ struct Image
 
         pixels[x + y * w] = color;
     }
-    ColorI getPixel(int x, int y)
+    ColorI getPixel(int x, int y) const
     {
         if(x < 0 || y < 0 || (size_t)x >= w || (size_t)y >= h)
         {
@@ -327,6 +362,10 @@ struct Image
         return pixels[x + y * w];
     }
     ColorI * getLineAddress(size_t y)
+    {
+        return &pixels[y * w];
+    }
+    const ColorI * getLineAddress(size_t y) const
     {
         return &pixels[y * w];
     }
@@ -354,6 +393,23 @@ struct Image
             return endV;
         }
     };
+    struct HLineRangeConst
+    {
+        const ColorI * beginV;
+        const ColorI * endV;
+        HLineRangeConst(ColorI * beginV, ColorI * endV)
+            : beginV(beginV), endV(endV)
+        {
+        }
+        const ColorI * begin()
+        {
+            return beginV;
+        }
+        const ColorI * end()
+        {
+            return endV;
+        }
+    };
     HLineRange getHorizontalLine(int startX, int endX, int y)
     {
         assert(startX <= endX);
@@ -361,12 +417,24 @@ struct Image
         assert(y >= 0 && (size_t)y < h);
         return HLineRange(&pixels[startX + y * w], &pixels[endX + y * w]);
     }
+    HLineRangeConst getHorizontalLine(int startX, int endX, int y) const
+    {
+        assert(startX <= endX);
+        assert(startX >= 0 && (size_t)endX < w);
+        assert(y >= 0 && (size_t)y < h);
+        return HLineRangeConst(&pixels[startX + y * w], &pixels[endX + y * w]);
+    }
     HLineRange getHorizontalLine(int y)
+    {
+        return getHorizontalLine(0, w, y);
+    }
+    HLineRangeConst getHorizontalLine(int y) const
     {
         return getHorizontalLine(0, w, y);
     }
     struct ColumnIterator : public std::iterator<std::random_access_iterator_tag, ColorI>
     {
+        friend struct ColumnConstIterator;
         ColorI * value;
         size_t w;
     public:
@@ -463,6 +531,108 @@ struct Image
             return *this;
         }
     };
+    struct ColumnConstIterator : public std::iterator<std::random_access_iterator_tag, const ColorI>
+    {
+        const ColorI * value;
+        size_t w;
+    public:
+        ColumnConstIterator()
+            : value(nullptr), w(0)
+        {
+        }
+        ColumnConstIterator(const ColorI * value, size_t w)
+            : value(value), w(w)
+        {
+        }
+        ColumnConstIterator(const ColumnIterator & rt)
+            : value(rt.value), w(rt.w)
+        {
+        }
+        bool operator ==(const ColumnConstIterator & rt) const
+        {
+            return value == rt.value;
+        }
+        bool operator !=(const ColumnConstIterator & rt) const
+        {
+            return value != rt.value;
+        }
+        bool operator >=(const ColumnConstIterator & rt) const
+        {
+            return value >= rt.value;
+        }
+        bool operator <=(const ColumnConstIterator & rt) const
+        {
+            return value <= rt.value;
+        }
+        bool operator >(const ColumnConstIterator & rt) const
+        {
+            return value > rt.value;
+        }
+        bool operator <(const ColumnConstIterator & rt) const
+        {
+            return value < rt.value;
+        }
+        const ColorI & operator *() const
+        {
+            return *value;
+        }
+        const ColorI & operator [](ptrdiff_t index) const
+        {
+            return value[(ptrdiff_t)w * index];
+        }
+        const ColorI * operator ->() const
+        {
+            return value;
+        }
+        const ColumnConstIterator & operator ++()
+        {
+            value += w;
+            return *this;
+        }
+        const ColumnConstIterator & operator --()
+        {
+            value -= w;
+            return *this;
+        }
+        ColumnConstIterator operator ++(int)
+        {
+            ColumnConstIterator retval = *this;
+            value += w;
+            return retval;
+        }
+        ColumnConstIterator operator --(int)
+        {
+            ColumnConstIterator retval = *this;
+            value -= w;
+            return retval;
+        }
+        ColumnConstIterator operator +(ptrdiff_t rt) const
+        {
+            return ColumnConstIterator(value + w * rt, w);
+        }
+        ColumnConstIterator operator -(ptrdiff_t rt) const
+        {
+            return ColumnConstIterator(value - w * rt, w);
+        }
+        friend ColumnConstIterator operator +(ptrdiff_t a, ColumnConstIterator b)
+        {
+            return ColumnConstIterator(b.value + b.w * a, b.w);
+        }
+        ptrdiff_t operator -(const ColumnConstIterator & rt) const
+        {
+            return (value - rt.value) / w;
+        }
+        const ColumnConstIterator & operator +=(ptrdiff_t rt)
+        {
+            value += w * rt;
+            return *this;
+        }
+        const ColumnConstIterator & operator -=(ptrdiff_t rt)
+        {
+            value -= w * rt;
+            return *this;
+        }
+    };
     struct VLineRange
     {
         ColorI * beginPtr;
@@ -481,6 +651,24 @@ struct Image
             return ColumnIterator(endPtr, w);
         }
     };
+    struct VLineRangeConst
+    {
+        const ColorI * beginPtr;
+        const ColorI * endPtr;
+        size_t w;
+        VLineRangeConst(const ColorI * beginPtr, const ColorI * endPtr, size_t w)
+            : beginPtr(beginPtr), endPtr(endPtr), w(w)
+        {
+        }
+        ColumnConstIterator begin() const
+        {
+            return ColumnConstIterator(beginPtr, w);
+        }
+        ColumnConstIterator end() const
+        {
+            return ColumnConstIterator(endPtr, w);
+        }
+    };
     VLineRange getVerticalLine(int x, int startY, int endY)
     {
         assert(startY <= endY);
@@ -492,17 +680,57 @@ struct Image
     {
         return getVerticalLine(x, 0, h);
     }
+    VLineRangeConst getVerticalLine(int x, int startY, int endY) const
+    {
+        assert(startY <= endY);
+        assert(startY >= 0 && (size_t)endY < h);
+        assert(x >= 0 && (size_t)x < w);
+        return VLineRangeConst(&pixels[x + startY * w], &pixels[x + endY * w], w);
+    }
+    VLineRangeConst getVerticalLine(int x) const
+    {
+        return getVerticalLine(x, 0, h);
+    }
+    static shared_ptr<const Image> loadImage(string fName);
+};
+
+struct Texture
+{
+    Texture(const Texture & rt) = delete;
+    const Texture & operator =(const Texture & rt) = delete;
+    Texture()
+    {
+    }
+    virtual ~Texture()
+    {
+    }
+    virtual shared_ptr<const Image> getImage() = 0;
+};
+
+class ImageTexture : public Texture
+{
+    shared_ptr<const Image> image;
+public:
+    ImageTexture(shared_ptr<const Image> image)
+        : image(image)
+    {
+        assert(image != nullptr);
+    }
+    virtual shared_ptr<const Image> getImage() override
+    {
+        return image;
+    }
 };
 
 struct TextureDescriptor
 {
-    shared_ptr<Image> image;
+    shared_ptr<Texture> image;
     float minU, minV, maxU, maxV;
-    TextureDescriptor(shared_ptr<Image> image = nullptr)
+    TextureDescriptor(shared_ptr<Texture> image = nullptr)
         : image(image), minU(0), minV(0), maxU(1), maxV(1)
     {
     }
-    TextureDescriptor(shared_ptr<Image> image, float minU, float maxU, float minV, float maxV)
+    TextureDescriptor(shared_ptr<Texture> image, float minU, float maxU, float minV, float maxV)
         : image(image), minU(0), minV(0), maxU(1), maxV(1)
     {
     }

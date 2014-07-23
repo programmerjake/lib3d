@@ -99,6 +99,10 @@ public:
         return scaleYValue;
     }
     virtual void enableWriteDepth(bool v) = 0;
+    virtual shared_ptr<Texture> preloadTexture(shared_ptr<Texture> texture)
+    {
+        return texture;
+    }
 };
 
 struct WindowRenderer : public Renderer
@@ -108,7 +112,7 @@ struct WindowRenderer : public Renderer
 
 struct ImageRenderer : public Renderer
 {
-    virtual shared_ptr<Image> finish() = 0;
+    virtual shared_ptr<Texture> finish() = 0;
     virtual void resize(size_t newW, size_t newH, float newAspectRatio = -1) = 0;
 };
 

@@ -10,7 +10,8 @@ class SoftwareRenderer : public ImageRenderer
 {
 private:
     shared_ptr<Image> image;
-    shared_ptr<Image> whiteTexture;
+    shared_ptr<const Image> whiteTexture;
+    shared_ptr<ImageTexture> imageTexture;
     struct PlaneEq
     {
         VectorF normal;
@@ -42,14 +43,14 @@ private:
     struct TriangleDescriptor
     {
         Triangle tri;
-        shared_ptr<Image> texture;
+        shared_ptr<const Image> texture;
     };
     vector<TriangleDescriptor> triangles;
     vector<float> zBuffer;
     vector<size_t> tBuffer;
     bool writeDepth = true;
     enum {NoTexture = ~(size_t)0};
-    void renderTriangle(Triangle triangleIn, shared_ptr<Image> texture);
+    void renderTriangle(Triangle triangleIn, shared_ptr<const Image> texture);
     float aspectRatio;
 public:
     SoftwareRenderer(size_t w, size_t h, float aspectRatio = -1)
@@ -57,6 +58,7 @@ public:
     {
         zBuffer.assign(w * h, (const float &)(float)0);
         tBuffer.assign(w * h, (const size_t &)NoTexture);
+        imageTexture = make_shared<ImageTexture>(image);
     }
     virtual void render(const Mesh & m) override;
     virtual void calcScales() override
@@ -72,7 +74,7 @@ protected:
         tBuffer.assign(image->w * image->h, NoTexture);
     }
 public:
-    virtual shared_ptr<Image> finish() override;
+    virtual shared_ptr<Texture> finish() override;
     virtual void enableWriteDepth(bool v) override
     {
         writeDepth = v;
@@ -80,6 +82,7 @@ public:
     virtual void resize(size_t newW, size_t newH, float newAspectRatio = -1) override
     {
         image = make_shared<Image>(newW, newH);
+        imageTexture = make_shared<ImageTexture>(image);
         zBuffer.assign(newW * newH, (const float &)(float)0);
         tBuffer.assign(newW * newH, (const size_t &)NoTexture);
         aspectRatio = newAspectRatio;

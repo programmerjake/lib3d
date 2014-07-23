@@ -42,6 +42,7 @@
 		<Unit filename="cacarenderer.cpp" />
 		<Unit filename="cacarenderer.h" />
 		<Unit filename="generate.h" />
+		<Unit filename="image.cpp" />
 		<Unit filename="image.h" />
 		<Unit filename="libaarenderer.cpp" />
 		<Unit filename="libaarenderer.h" />

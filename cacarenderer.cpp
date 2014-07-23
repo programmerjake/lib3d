@@ -68,9 +68,9 @@ public:
     }
     virtual void flip() override
     {
-        shared_ptr<Image> pimage = imageRenderer->finish();
+        shared_ptr<const Image> pimage = imageRenderer->finish()->getImage();
         assert(pimage != nullptr);
-        Image & image = *pimage;
+        const Image & image = *pimage;
         assert(image.w == w);
         assert(image.h == h);
         for(size_t y = 0; y < h; y++)

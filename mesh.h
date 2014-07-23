@@ -55,8 +55,8 @@ struct ColorizedTransformedMesh
 struct Mesh
 {
     vector<Triangle> triangles;
-    shared_ptr<Image> image;
-    Mesh(vector<Triangle> triangles = vector<Triangle>(), shared_ptr<Image> image = nullptr)
+    shared_ptr<Texture> image;
+    Mesh(vector<Triangle> triangles = vector<Triangle>(), shared_ptr<Texture> image = nullptr)
         : triangles(std::move(triangles)), image(image)
     {
     }

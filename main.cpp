@@ -40,7 +40,7 @@ VectorF sphericalCoordinates(float r, float theta, float phi)
     return Matrix::rotateZ(-phi).concat(Matrix::rotateY(theta)).apply(VectorF(r, 0, 0));
 }
 
-shared_ptr<Mesh> makeSphereMesh(size_t uCount, size_t vCount, float r, shared_ptr<Image> image = nullptr, ColorF color = RGBAF(1, 1, 1, 1))
+shared_ptr<Mesh> makeSphereMesh(size_t uCount, size_t vCount, float r, shared_ptr<Texture> image = nullptr, ColorF color = RGBAF(1, 1, 1, 1))
 {
     vector<Triangle> triangles;
     triangles.reserve(uCount * vCount * 2);
@@ -88,17 +88,17 @@ int main()
     m->append(reverse(*m));
     shared_ptr<Mesh> m2;
     shared_ptr<ImageRenderer> imageRenderer;
+    shared_ptr<Texture> testTexture = renderer->preloadTexture(make_shared<ImageTexture>(Image::loadImage("test")));
 
-    if(true)
+    if(false)
     {
-        TextureDescriptor td(make_shared<Image>());
+        TextureDescriptor td(testTexture);
         m2 = (shared_ptr<Mesh>)transform(Matrix::translate(VectorF(-0.5)).concat(Matrix::scale(2 * 10)), Generate::unitBox(td, td, td, td, td, td));
-        m2->image = nullptr;
         imageRenderer = makeImageRenderer(256, 256);
     }
     else
     {
-        m2 = makeSphereMesh(24, 12, 16);
+        m2 = makeSphereMesh(24, 12, 16, testTexture);
         imageRenderer = makeImageRenderer(512, 256);
     }
 
@@ -109,10 +109,10 @@ int main()
         double time = timer();
         Matrix tform = (Matrix::rotateY((time - startTime) / 2 * M_PI)).concat(Matrix::translate(0, 0, -30));
         renderer->clear();
-#if 1
+#if 0
         imageRenderer->clear(RGBF(1, 1, 1));
         imageRenderer->render((Mesh)transform(tform, m));
-        shared_ptr<Image> image = imageRenderer->finish();
+        shared_ptr<Texture> image = imageRenderer->finish();
         tform = (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::translate(0, 0, -30));
         m2->image = image;
         renderer->render(shadeMesh(transform(tform, m2), shadeFn));

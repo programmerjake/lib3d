@@ -71,10 +71,6 @@ protected:
     {
         imageRenderer->clear(bg);
     }
-    virtual void onSetFPS() override
-    {
-        cout << "Size : " << w << "x" << h << "                 FPS : " << fps << "\x1b[K\r" << flush;
-    }
 public:
     virtual void calcScales() override
     {
@@ -90,9 +86,9 @@ public:
     }
     virtual void flip() override
     {
-        shared_ptr<Image> pimage = imageRenderer->finish();
+        shared_ptr<const Image> pimage = imageRenderer->finish()->getImage();
         assert(pimage != nullptr);
-        Image & image = *pimage;
+        const Image & image = *pimage;
         assert(image.w == w);
         assert(image.h == h);
         void * pixels;
@@ -226,49 +222,65 @@ private:
         LOAD_GL_FUNCTION(glTexSubImage2D);
     }
 
-    friend struct GLImageParams;
+    friend struct GLTexture;
 
-    struct GLImageParams
+    struct GLTexture : public Texture
     {
         GLuint texture = 0;
         size_t lastW = 0, lastH = 0;
         OpenGLWindowRenderer * renderer;
         vector<GLubyte> imageData;
-        GLImageParams(OpenGLWindowRenderer * renderer)
+        shared_ptr<const Image> image = nullptr;
+        bool imageValid = false;
+        GLTexture(OpenGLWindowRenderer * renderer)
             : renderer(renderer)
         {
         }
-        ~GLImageParams()
+        virtual ~GLTexture()
         {
-            renderer->destroyImageParams(*this);
+            renderer->destroyGLTexture(*this);
+        }
+        virtual shared_ptr<const Image> getImage() override
+        {
+            return image;
         }
     };
 
-    void destroyImageParams(GLImageParams & params)
+    void destroyGLTexture(GLTexture & params)
     {
         if(glContext != nullptr && params.texture != 0)
         {
             glDeleteTextures(1, &params.texture);
+            params.texture = 0;
         }
     }
 
-    void bindImage(shared_ptr<Image> image)
+    shared_ptr<GLTexture> bindImage(shared_ptr<Texture> textureIn)
     {
-        if(image == nullptr || image->pixels == nullptr)
+        if(textureIn == nullptr)
         {
             glBindTexture(GL_TEXTURE_2D, 0);
-            return;
+            return nullptr;
         }
+        shared_ptr<GLTexture> texture = dynamic_pointer_cast<GLTexture>(textureIn);
+        shared_ptr<const Image> image;
+        if(texture != nullptr)
+        {
+            glBindTexture(GL_TEXTURE_2D, texture->texture);
+            return texture;
+        }
+        image = textureIn->getImage();
         size_t w = image->w, h = image->h;
-        shared_ptr<GLImageParams> pparams = static_pointer_cast<GLImageParams>(image->glProperties);
+        texture = static_pointer_cast<GLTexture>(image->glProperties);
         bool isNew = false;
-        if(pparams == nullptr)
+        if(texture == nullptr)
         {
             isNew = true;
-            pparams = make_shared<GLImageParams>(this);
-            image->glProperties = static_pointer_cast<void>(pparams);
+            texture = make_shared<GLTexture>(this);
+            image->glProperties = static_pointer_cast<void>(texture);
         }
-        GLImageParams & params = *pparams;
+        texture->image = image;
+        GLTexture & params = *texture;
         if(!isNew)
         {
             if(params.lastW != w || params.lastH != h)
@@ -285,16 +297,16 @@ private:
         }
         constexpr size_t bytesPerPixel = 4;
         params.imageData.resize(w * h * bytesPerPixel);
-        ColorI * pixels = image->pixels;
+        const ColorI * pixels = image->getPixels();
         for(size_t y = 0; y < h; y++)
         {
             for(size_t x = 0; x < w; x++)
             {
                 ColorI color = pixels[x + y * w];
-                params.imageData[x * bytesPerPixel + (h - y - 1) * bytesPerPixel * h + 0] = color.r;
-                params.imageData[x * bytesPerPixel + (h - y - 1) * bytesPerPixel * h + 1] = color.g;
-                params.imageData[x * bytesPerPixel + (h - y - 1) * bytesPerPixel * h + 2] = color.b;
-                params.imageData[x * bytesPerPixel + (h - y - 1) * bytesPerPixel * h + 3] = color.a;
+                params.imageData[x * bytesPerPixel + (h - y - 1) * bytesPerPixel * w + 0] = color.r;
+                params.imageData[x * bytesPerPixel + (h - y - 1) * bytesPerPixel * w + 1] = color.g;
+                params.imageData[x * bytesPerPixel + (h - y - 1) * bytesPerPixel * w + 2] = color.b;
+                params.imageData[x * bytesPerPixel + (h - y - 1) * bytesPerPixel * w + 3] = color.a;
             }
         }
         glBindTexture(GL_TEXTURE_2D, params.texture);
@@ -309,6 +321,7 @@ private:
         }
         else
             glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, (GLvoid *)&params.imageData[0]);
+        return texture;
     }
 
     void setupContext()
@@ -406,10 +419,6 @@ protected:
         glClearColor(bg.r, bg.g, bg.b, bg.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
-    virtual void onSetFPS() override
-    {
-        cout << "Size : " << w << "x" << h << "                 FPS : " << fps << "\x1b[K\r" << flush;
-    }
 public:
     virtual void calcScales() override
     {
@@ -491,6 +500,14 @@ public:
             h = hi;
             setupContext();
         }
+    }
+    virtual shared_ptr<Texture> preloadTexture(shared_ptr<Texture> texture) override
+    {
+        if(texture == nullptr)
+            return texture;
+        if(dynamic_cast<const GLTexture *>(texture.get()) != nullptr)
+            return texture;
+        return bindImage(texture);
     }
 };
 
