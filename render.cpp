@@ -182,6 +182,7 @@ private:
     DECLARE_GL_FUNCTION(void, glTexImage2D, (GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *pixels));
     DECLARE_GL_FUNCTION(void, glTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels));
     DECLARE_GL_FUNCTION(void, glGetTexImage, (GLenum target, GLint level, GLenum format, GLenum type, GLvoid * img));
+    DECLARE_GL_FUNCTION(void, glCopyTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint x, GLint y, GLsizei width, GLsizei height));
 
     // in GL_EXT_framebuffer_object
     DECLARE_GL_FUNCTION(void, glGenFramebuffersEXT, (GLsizei n, GLuint *framebuffers));
@@ -190,6 +191,10 @@ private:
     DECLARE_GL_FUNCTION(void, glDeleteRenderbuffersEXT, (GLsizei n, const GLuint *renderbuffers));
     DECLARE_GL_FUNCTION(void, glBindFramebufferEXT, (GLenum target, GLuint framebuffer));
     DECLARE_GL_FUNCTION(void, glBindRenderbufferEXT, (GLenum target, GLuint renderbuffer));
+    DECLARE_GL_FUNCTION(void, glFramebufferTexture2DEXT, (GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level));
+    DECLARE_GL_FUNCTION(void, glRenderbufferStorageEXT, (GLenum target, GLenum internalformat, GLsizei width, GLsizei height));
+    DECLARE_GL_FUNCTION(void, glFramebufferRenderbufferEXT, (GLenum target, GLenum attachment, GLenum renderbuffertarget, GLuint renderbuffer));
+    DECLARE_GL_FUNCTION(GLenum, glCheckFramebufferStatusEXT, (GLenum target));
 
     void loadFunctions()
     {
@@ -241,6 +246,10 @@ private:
             LOAD_GL_FUNCTION(glDeleteRenderbuffersEXT);
             LOAD_GL_FUNCTION(glBindFramebufferEXT);
             LOAD_GL_FUNCTION(glBindRenderbufferEXT);
+            LOAD_GL_FUNCTION(glFramebufferTexture2DEXT);
+            LOAD_GL_FUNCTION(glRenderbufferStorageEXT);
+            LOAD_GL_FUNCTION(glFramebufferRenderbufferEXT);
+            LOAD_GL_FUNCTION(glCheckFramebufferStatusEXT);
         }
     }
 
@@ -321,7 +330,6 @@ private:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
         return retval;
     }
@@ -613,18 +621,176 @@ class OpenGLImageRenderer : public ImageRenderer
 {
 private:
     shared_ptr<OpenGLWindowRenderer::GLTexture> image;
+    size_t w, h;
+    float aspectRatio;
     OpenGLWindowRenderer * renderer;
-public:
-    OpenGLImageRenderer(size_t w, size_t h, OpenGLWindowRenderer * renderer = OpenGLWindowRenderer::windowRenderer)
-        : image(renderer->createTexture(w, h)), renderer(renderer)
+    vector<float> vertexArray, textureCoordArray, colorArray;
+    GLuint framebuffer, renderbuffer, texture;
+    void bindImage(shared_ptr<Texture> textureIn)
     {
+        renderer->bindImage(textureIn);
     }
-#warning finish implementing OpenGLImageRenderer
+
+    void setupContext()
+    {
+        Renderer::calcScales(w, h, aspectRatio);
+        renderer->setupContext(w, h, scaleX(), scaleY(), framebuffer);
+    }
+
+    void teardown()
+    {
+        if(image == nullptr)
+            return;
+        renderer->glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
+        renderer->glBindTexture(GL_TEXTURE_2D, 0);
+        renderer->glDeleteTextures(1, &texture);
+        renderer->glDeleteRenderbuffersEXT(1, &renderbuffer);
+        renderer->glDeleteFramebuffersEXT(1, &framebuffer);
+        image = nullptr;
+    }
+
+    void setup()
+    {
+        if(!renderer->supportsExtFrameBufferObjects)
+            throw runtime_error("FBOs not supported");
+        image = renderer->createTexture(w, h);
+        renderer->glGenFramebuffersEXT(1, &framebuffer);
+        renderer->glGenRenderbuffersEXT(1, &renderbuffer);
+        renderer->glGenTextures(1, &texture);
+        renderer->glBindTexture(GL_TEXTURE_2D, texture);
+        renderer->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        renderer->glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, framebuffer);
+        renderer->glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_COLOR_ATTACHMENT0_EXT, GL_TEXTURE_2D, texture, 0);
+        renderer->glBindRenderbufferEXT(GL_RENDERBUFFER_EXT, renderbuffer);
+        renderer->glRenderbufferStorageEXT(GL_RENDERBUFFER_EXT, GL_DEPTH_COMPONENT24, w, h);
+        renderer->glFramebufferRenderbufferEXT(GL_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_RENDERBUFFER_EXT, renderbuffer);
+        if(renderer->glCheckFramebufferStatusEXT(GL_FRAMEBUFFER_EXT) != GL_FRAMEBUFFER_COMPLETE_EXT)
+        {
+            teardown();
+            throw runtime_error("can't create valid framebuffer in OpenGLImageRenderer constructor");
+        }
+    }
+
+    bool writeDepth = true;
+public:
+    OpenGLImageRenderer(size_t w, size_t h, float aspectRatio, OpenGLWindowRenderer * renderer = OpenGLWindowRenderer::windowRenderer)
+        : w(w), h(h), aspectRatio(aspectRatio), renderer(renderer)
+    {
+        setup();
+    }
+    virtual ~OpenGLImageRenderer()
+    {
+        teardown();
+    }
+protected:
+    virtual void clearInternal(ColorF bg) override
+    {
+        setupContext();
+        renderer->glDepthMask(GL_TRUE);
+        renderer->glClearColor(bg.r, bg.g, bg.b, bg.a);
+        renderer->glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    }
+public:
+    virtual void calcScales() override
+    {
+        Renderer::calcScales(w, h, aspectRatio);
+    }
+    virtual void render(const Mesh &m) override
+    {
+        if(m.triangles.size() == 0)
+            return;
+        setupContext();
+        renderer->glDepthMask(writeDepth ? GL_TRUE : GL_FALSE);
+        bindImage(m.image);
+        vertexArray.resize(m.triangles.size() * 3 * 3);
+        textureCoordArray.resize(m.triangles.size() * 3 * 2);
+        colorArray.resize(m.triangles.size() * 3 * 4);
+        for(size_t i = 0; i < m.triangles.size(); i++)
+        {
+            Triangle tri = m.triangles[i];
+            vertexArray[i * 3 * 3 + 0 * 3 + 0] = tri.p1.x;
+            vertexArray[i * 3 * 3 + 0 * 3 + 1] = tri.p1.y;
+            vertexArray[i * 3 * 3 + 0 * 3 + 2] = tri.p1.z;
+            vertexArray[i * 3 * 3 + 1 * 3 + 0] = tri.p2.x;
+            vertexArray[i * 3 * 3 + 1 * 3 + 1] = tri.p2.y;
+            vertexArray[i * 3 * 3 + 1 * 3 + 2] = tri.p2.z;
+            vertexArray[i * 3 * 3 + 2 * 3 + 0] = tri.p3.x;
+            vertexArray[i * 3 * 3 + 2 * 3 + 1] = tri.p3.y;
+            vertexArray[i * 3 * 3 + 2 * 3 + 2] = tri.p3.z;
+            textureCoordArray[i * 3 * 2 + 0 * 2 + 0] = tri.t1.u;
+            textureCoordArray[i * 3 * 2 + 0 * 2 + 1] = tri.t1.v;
+            textureCoordArray[i * 3 * 2 + 1 * 2 + 0] = tri.t2.u;
+            textureCoordArray[i * 3 * 2 + 1 * 2 + 1] = tri.t2.v;
+            textureCoordArray[i * 3 * 2 + 2 * 2 + 0] = tri.t3.u;
+            textureCoordArray[i * 3 * 2 + 2 * 2 + 1] = tri.t3.v;
+            colorArray[i * 3 * 4 + 0 * 4 + 0] = tri.c1.r;
+            colorArray[i * 3 * 4 + 0 * 4 + 1] = tri.c1.g;
+            colorArray[i * 3 * 4 + 0 * 4 + 2] = tri.c1.b;
+            colorArray[i * 3 * 4 + 0 * 4 + 3] = tri.c1.a;
+            colorArray[i * 3 * 4 + 1 * 4 + 0] = tri.c2.r;
+            colorArray[i * 3 * 4 + 1 * 4 + 1] = tri.c2.g;
+            colorArray[i * 3 * 4 + 1 * 4 + 2] = tri.c2.b;
+            colorArray[i * 3 * 4 + 1 * 4 + 3] = tri.c2.a;
+            colorArray[i * 3 * 4 + 2 * 4 + 0] = tri.c3.r;
+            colorArray[i * 3 * 4 + 2 * 4 + 1] = tri.c3.g;
+            colorArray[i * 3 * 4 + 2 * 4 + 2] = tri.c3.b;
+            colorArray[i * 3 * 4 + 2 * 4 + 3] = tri.c3.a;
+        }
+        renderer->glVertexPointer(3, GL_FLOAT, 0, (const void *)&vertexArray[0]);
+        renderer->glTexCoordPointer(2, GL_FLOAT, 0, (const void *)&textureCoordArray[0]);
+        renderer->glColorPointer(4, GL_FLOAT, 0, (const void *)&colorArray[0]);
+        renderer->glDrawArrays(GL_TRIANGLES, 0, (GLint)m.triangles.size() * 3);
+    }
+    virtual void enableWriteDepth(bool v) override
+    {
+        writeDepth = v;
+    }
+    virtual shared_ptr<Texture> finish() override
+    {
+        setupContext();
+        bindImage(image);
+        renderer->glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+        image->invalidate();
+        return image;
+    }
+    virtual shared_ptr<Texture> preloadTexture(shared_ptr<Texture> texture) override
+    {
+        if(texture == nullptr)
+            return texture;
+        if(dynamic_cast<const OpenGLWindowRenderer::GLTexture *>(texture.get()) != nullptr)
+            return texture;
+        setupContext();
+        return renderer->bindImage(texture);
+    }
+    virtual void resize(size_t newW, size_t newH, float newAspectRatio = -1) override
+    {
+        teardown();
+        w = newW;
+        h = newH;
+        aspectRatio = newAspectRatio;
+        setup();
+    }
 };
 
 shared_ptr<ImageRenderer> makeSoftwareImageRenderer(size_t w, size_t h, float aspectRatio)
 {
     return make_shared<SoftwareRenderer>(w, h, aspectRatio);
+}
+
+shared_ptr<ImageRenderer> makeOpenGLImageRenderer(size_t w, size_t h, float aspectRatio)
+{
+#if 0
+    try
+    {
+        return make_shared<OpenGLImageRenderer>(w, h, aspectRatio);
+    }
+    catch(exception & e)
+    {
+    }
+#else
+#warning finish OpenGLImageRenderer
+#endif
+    return makeSoftwareImageRenderer(w, h, aspectRatio);
 }
 
 struct Driver
@@ -652,8 +818,7 @@ struct Driver
 
 const Driver drivers[] =
 {
-    Driver("opengl", []()->shared_ptr<WindowRenderer>{return make_shared<OpenGLWindowRenderer>();}, makeSoftwareImageRenderer),
-#warning make opengl image renderer
+    Driver("opengl", []()->shared_ptr<WindowRenderer>{return make_shared<OpenGLWindowRenderer>();}, makeOpenGLImageRenderer),
     Driver("sdl", []()->shared_ptr<WindowRenderer>{return make_shared<SDLWindowRenderer>();}, makeSoftwareImageRenderer),
     Driver("caca", makeCacaRenderer, makeSoftwareImageRenderer),
     Driver("aalib", makeLibAARenderer, makeSoftwareImageRenderer),
