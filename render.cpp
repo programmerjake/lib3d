@@ -141,10 +141,12 @@ public:
 
 class OpenGLWindowRenderer : public WindowRenderer
 {
+    friend class OpenGLImageRenderer;
 private:
     SDL_Window * window;
     SDL_GLContext glContext;
     size_t w, h;
+    bool supportsExtFrameBufferObjects;
     vector<float> vertexArray, textureCoordArray, colorArray;
 #define DECLARE_GL_FUNCTION(retType, fn, args) \
     typedef retType (APIENTRY * fn ## Type)args; \
@@ -179,6 +181,15 @@ private:
     DECLARE_GL_FUNCTION(void, glPixelStorei, (GLenum pname, GLint param));
     DECLARE_GL_FUNCTION(void, glTexImage2D, (GLenum target, GLint level, GLint internalFormat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *pixels));
     DECLARE_GL_FUNCTION(void, glTexSubImage2D, (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *pixels));
+    DECLARE_GL_FUNCTION(void, glGetTexImage, (GLenum target, GLint level, GLenum format, GLenum type, GLvoid * img));
+
+    // in GL_EXT_framebuffer_object
+    DECLARE_GL_FUNCTION(void, glGenFramebuffersEXT, (GLsizei n, GLuint *framebuffers));
+    DECLARE_GL_FUNCTION(void, glDeleteFramebuffersEXT, (GLsizei n, const GLuint *framebuffers));
+    DECLARE_GL_FUNCTION(void, glGenRenderbuffersEXT, (GLsizei n, GLuint *renderbuffers));
+    DECLARE_GL_FUNCTION(void, glDeleteRenderbuffersEXT, (GLsizei n, const GLuint *renderbuffers));
+    DECLARE_GL_FUNCTION(void, glBindFramebufferEXT, (GLenum target, GLuint framebuffer));
+    DECLARE_GL_FUNCTION(void, glBindRenderbufferEXT, (GLenum target, GLuint renderbuffer));
 
     void loadFunctions()
     {
@@ -220,6 +231,17 @@ private:
         LOAD_GL_FUNCTION(glPixelStorei);
         LOAD_GL_FUNCTION(glTexImage2D);
         LOAD_GL_FUNCTION(glTexSubImage2D);
+        LOAD_GL_FUNCTION(glGetTexImage);
+        supportsExtFrameBufferObjects = SDL_GL_ExtensionSupported("GL_EXT_framebuffer_object");
+        if(supportsExtFrameBufferObjects)
+        {
+            LOAD_GL_FUNCTION(glGenFramebuffersEXT);
+            LOAD_GL_FUNCTION(glDeleteFramebuffersEXT);
+            LOAD_GL_FUNCTION(glGenRenderbuffersEXT);
+            LOAD_GL_FUNCTION(glDeleteRenderbuffersEXT);
+            LOAD_GL_FUNCTION(glBindFramebufferEXT);
+            LOAD_GL_FUNCTION(glBindRenderbufferEXT);
+        }
     }
 
     friend struct GLTexture;
@@ -227,10 +249,11 @@ private:
     struct GLTexture : public Texture
     {
         GLuint texture = 0;
-        size_t lastW = 0, lastH = 0;
+        size_t w = 0, h = 0;
         OpenGLWindowRenderer * renderer;
         vector<GLubyte> imageData;
-        shared_ptr<const Image> image = nullptr;
+        shared_ptr<Image> simage = nullptr;
+        weak_ptr<const Image> wimage;
         bool imageValid = false;
         GLTexture(OpenGLWindowRenderer * renderer)
             : renderer(renderer)
@@ -242,7 +265,39 @@ private:
         }
         virtual shared_ptr<const Image> getImage() override
         {
-            return image;
+            if(simage == nullptr)
+            {
+                shared_ptr<const Image> image = wimage.lock();
+                if(image != nullptr)
+                    return image;
+                simage = make_shared<Image>(w, h);
+                imageValid = false;
+            }
+            if(simage != nullptr && !imageValid)
+            {
+                constexpr size_t bytesPerPixel = 4;
+                imageValid = true;
+                imageData.resize(w * h * bytesPerPixel);
+                renderer->glPixelStorei(GL_PACK_ALIGNMENT, 1);
+                renderer->glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE, (GLvoid *)&imageData[0]);
+                ColorI * pixels = simage->getPixels();
+                for(size_t y = 0; y < h; y++)
+                {
+                    for(size_t x = 0; x < w; x++)
+                    {
+                        ColorI & color = pixels[x + (h - y - 1) * w];
+                        color.r = imageData[x * bytesPerPixel + y * bytesPerPixel * w + 0];
+                        color.g = imageData[x * bytesPerPixel + y * bytesPerPixel * w + 1];
+                        color.b = imageData[x * bytesPerPixel + y * bytesPerPixel * w + 2];
+                        color.a = imageData[x * bytesPerPixel + y * bytesPerPixel * w + 3];
+                    }
+                }
+            }
+            return static_pointer_cast<const Image>(simage);
+        }
+        void invalidate()
+        {
+            imageValid = false;
         }
     };
 
@@ -255,6 +310,22 @@ private:
         }
     }
 
+    shared_ptr<GLTexture> createTexture(size_t w, size_t h)
+    {
+        shared_ptr<GLTexture> retval = make_shared<GLTexture>(this);
+        glGenTextures(1, &retval->texture);
+        retval->w = w;
+        retval->h = h;
+        glBindTexture(GL_TEXTURE_2D, retval->texture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        return retval;
+    }
+
     shared_ptr<GLTexture> bindImage(shared_ptr<Texture> textureIn)
     {
         if(textureIn == nullptr)
@@ -263,13 +334,12 @@ private:
             return nullptr;
         }
         shared_ptr<GLTexture> texture = dynamic_pointer_cast<GLTexture>(textureIn);
-        shared_ptr<const Image> image;
         if(texture != nullptr)
         {
             glBindTexture(GL_TEXTURE_2D, texture->texture);
             return texture;
         }
-        image = textureIn->getImage();
+        shared_ptr<const Image> image = textureIn->getImage();
         size_t w = image->w, h = image->h;
         texture = static_pointer_cast<GLTexture>(image->glProperties);
         bool isNew = false;
@@ -279,11 +349,11 @@ private:
             texture = make_shared<GLTexture>(this);
             image->glProperties = static_pointer_cast<void>(texture);
         }
-        texture->image = image;
+        texture->wimage = image;
         GLTexture & params = *texture;
         if(!isNew)
         {
-            if(params.lastW != w || params.lastH != h)
+            if(params.w != w || params.w != h)
             {
                 glDeleteTextures(1, &params.texture);
                 isNew = true;
@@ -292,8 +362,8 @@ private:
         if(isNew)
         {
             glGenTextures(1, &params.texture);
-            params.lastW = w;
-            params.lastH = h;
+            params.w = w;
+            params.w = h;
         }
         constexpr size_t bytesPerPixel = 4;
         params.imageData.resize(w * h * bytesPerPixel);
@@ -317,16 +387,21 @@ private:
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, (GLvoid *)&params.imageData[0]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, (const GLvoid *)&params.imageData[0]);
         }
         else
-            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, (GLvoid *)&params.imageData[0]);
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, (const GLvoid *)&params.imageData[0]);
         return texture;
     }
 
-    void setupContext()
+    void setupContext(size_t w, size_t h, float scaleXValue, float scaleYValue, GLuint framebuffer)
     {
-        Renderer::calcScales(w, h);
+        if(supportsExtFrameBufferObjects)
+            glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, framebuffer);
+        else
+        {
+            assert(framebuffer == 0);
+        }
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_TEXTURE_2D);
         glEnable(GL_ALPHA_TEST);
@@ -343,12 +418,20 @@ private:
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
         const float minDistance = 5e-2f, maxDistance = 100.0f;
-        glFrustum(-minDistance * scaleX(), minDistance * scaleX(), -minDistance * scaleY(), minDistance * scaleY(), minDistance, maxDistance);
+        glFrustum(-minDistance * scaleXValue, minDistance * scaleXValue, -minDistance * scaleYValue, minDistance * scaleYValue, minDistance, maxDistance);
         glEnableClientState(GL_COLOR_ARRAY);
         glEnableClientState(GL_TEXTURE_COORD_ARRAY);
         glEnableClientState(GL_VERTEX_ARRAY);
     }
+
+    void setupContext()
+    {
+        Renderer::calcScales(w, h);
+        setupContext(w, h, scaleX(), scaleY(), 0);
+    }
+    bool writeDepth = true;
 public:
+    static OpenGLWindowRenderer * windowRenderer;
     OpenGLWindowRenderer()
     {
         if(SDL_Init(SDL_INIT_VIDEO) != 0)
@@ -366,6 +449,8 @@ public:
         SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, 8);
         SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
         window = SDL_CreateWindow("lib3d", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
         if(window == nullptr)
         {
@@ -403,9 +488,11 @@ public:
             throw e;
         }
         setupContext();
+        windowRenderer = this;
     }
     virtual ~OpenGLWindowRenderer()
     {
+        windowRenderer = nullptr;
         SDL_GL_DeleteContext(glContext);
         glContext = nullptr;
         SDL_DestroyWindow(window);
@@ -415,6 +502,8 @@ public:
 protected:
     virtual void clearInternal(ColorF bg) override
     {
+        if(supportsExtFrameBufferObjects)
+            setupContext();
         glDepthMask(GL_TRUE);
         glClearColor(bg.r, bg.g, bg.b, bg.a);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -428,6 +517,9 @@ public:
     {
         if(m.triangles.size() == 0)
             return;
+        if(supportsExtFrameBufferObjects)
+            setupContext();
+        glDepthMask(writeDepth ? GL_TRUE : GL_FALSE);
         bindImage(m.image);
         vertexArray.resize(m.triangles.size() * 3 * 3);
         textureCoordArray.resize(m.triangles.size() * 3 * 2);
@@ -470,10 +562,12 @@ public:
     }
     virtual void enableWriteDepth(bool v) override
     {
-        glDepthMask(v ? GL_TRUE : GL_FALSE);
+        writeDepth = v;
     }
     virtual void flip() override
     {
+        if(supportsExtFrameBufferObjects)
+            setupContext();
         SDL_GL_SwapWindow(window);
         calcFPS();
         SDL_Event event;
@@ -507,8 +601,25 @@ public:
             return texture;
         if(dynamic_cast<const GLTexture *>(texture.get()) != nullptr)
             return texture;
+        if(supportsExtFrameBufferObjects)
+            setupContext();
         return bindImage(texture);
     }
+};
+
+OpenGLWindowRenderer * OpenGLWindowRenderer::windowRenderer = nullptr;
+
+class OpenGLImageRenderer : public ImageRenderer
+{
+private:
+    shared_ptr<OpenGLWindowRenderer::GLTexture> image;
+    OpenGLWindowRenderer * renderer;
+public:
+    OpenGLImageRenderer(size_t w, size_t h, OpenGLWindowRenderer * renderer = OpenGLWindowRenderer::windowRenderer)
+        : image(renderer->createTexture(w, h)), renderer(renderer)
+    {
+    }
+#warning finish implementing OpenGLImageRenderer
 };
 
 shared_ptr<ImageRenderer> makeSoftwareImageRenderer(size_t w, size_t h, float aspectRatio)
