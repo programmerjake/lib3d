@@ -33,14 +33,18 @@
 			<Add option="-std=c++11" />
 			<Add option="-Wall" />
 			<Add option="-fexceptions -mfpmath=sse -funsafe-math-optimizations `sdl2-config --cflags`" />
+			<Add option="`pkg-config libavcodec libavformat --cflags`" />
 		</Compiler>
 		<Linker>
 			<Add option="`sdl2-config --libs`" />
+			<Add option="`pkg-config libavcodec libavformat --libs`" />
 			<Add library="aa" />
 			<Add library="caca" />
 		</Linker>
 		<Unit filename="cacarenderer.cpp" />
 		<Unit filename="cacarenderer.h" />
+		<Unit filename="ffmpeg_renderer.cpp" />
+		<Unit filename="ffmpeg_renderer.h" />
 		<Unit filename="generate.h" />
 		<Unit filename="image.cpp" />
 		<Unit filename="image.h" />

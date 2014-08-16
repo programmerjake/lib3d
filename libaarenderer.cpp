@@ -11,13 +11,14 @@ private:
     aa_renderparams * renderParams;
     shared_ptr<ImageRenderer> imageRenderer;
     size_t w, h;
-    float aspectRatio;
+    float aspectRatio, defaultAspectRatio;
     static void resizeHandler(aa_context * context)
     {
         aa_resize(context);
     }
 public:
     LibAARenderer()
+        : defaultAspectRatio(getDefaultRendererAspectRatio())
     {
         if(!aa_parseoptions(nullptr, nullptr, nullptr, nullptr))
             throw runtime_error("aalib option parsing error");
@@ -28,8 +29,8 @@ public:
         h = aa_imgheight(context);
         int physWidth = aa_mmwidth(context);
         int physHeight = aa_mmheight(context);
-        aspectRatio = -1;
-        if(physWidth > 0 && physHeight > 0)
+        aspectRatio = defaultAspectRatio;
+        if(physWidth > 0 && physHeight > 0 && aspectRatio == -1)
             aspectRatio = (float)physWidth / physHeight;
         if(!aa_autoinitkbd(context, AA_SENDRELEASE))
         {
@@ -102,8 +103,8 @@ public:
         if(hi <= 0) hi = 1;
         int physWidth = aa_mmwidth(context);
         int physHeight = aa_mmheight(context);
-        float aspectRatio = -1;
-        if(physWidth > 0 && physHeight > 0)
+        float aspectRatio = defaultAspectRatio;
+        if(physWidth > 0 && physHeight > 0 && aspectRatio != -1)
             aspectRatio = (float)physWidth / physHeight;
         if((int)w != wi || (int)h != hi || aspectRatio != this->aspectRatio)
         {

@@ -2,6 +2,7 @@
 #include "softrender.h"
 #include "libaarenderer.h"
 #include "cacarenderer.h"
+#include "ffmpeg_renderer.h"
 #include <SDL.h>
 #include <stdexcept>
 #include <cstdlib>
@@ -15,6 +16,37 @@ using namespace std;
 
 namespace
 {
+int defaultRendererWidth = 640, defaultRendererHeight = 480;
+float defaultRendererAspectRatio = -1;
+}
+
+void setDefaultRendererSize(int w, int h, float aspectRatio)
+{
+    assert(w > 0 && h > 0);
+    assert(aspectRatio == -1 || aspectRatio > 0);
+    defaultRendererWidth = w;
+    defaultRendererHeight = h;
+    defaultRendererAspectRatio = aspectRatio;
+}
+
+int getDefaultRendererWidth()
+{
+    return defaultRendererWidth;
+}
+
+int getDefaultRendererHeight()
+{
+    return defaultRendererHeight;
+}
+
+float getDefaultRendererAspectRatio()
+{
+    return defaultRendererAspectRatio;
+}
+
+namespace
+{
+
 #ifdef NDEBUG
 #define verify(v) do {if(v) {}} while(0)
 #else
@@ -29,6 +61,7 @@ private:
     SDL_Renderer * sdlRenderer;
     shared_ptr<ImageRenderer> imageRenderer;
     size_t w, h;
+    float aspectRatio;
 public:
     SDLWindowRenderer()
     {
@@ -36,7 +69,7 @@ public:
         {
             throw runtime_error(string("SDL_Init Error : ") + SDL_GetError());
         }
-        if(SDL_CreateWindowAndRenderer(640, 480, SDL_WINDOW_RESIZABLE, &window, &sdlRenderer) != 0)
+        if(SDL_CreateWindowAndRenderer(getDefaultRendererWidth(), getDefaultRendererHeight(), SDL_WINDOW_RESIZABLE, &window, &sdlRenderer) != 0)
         {
             string msg = string("SDL_CreateWindowAndRenderer Error : ") + SDL_GetError();
             SDL_Quit();
@@ -46,6 +79,7 @@ public:
         SDL_GetWindowSize(window, &wi, &hi);
         w = wi;
         h = hi;
+        aspectRatio = getDefaultRendererAspectRatio();
         if(w <= 0) w = 1;
         if(h <= 0) h = 1;
         texture = SDL_CreateTexture(sdlRenderer, SDL_MasksToPixelFormatEnum(32, RGBAI(0xFF, 0, 0, 0), RGBAI(0, 0xFF, 0, 0), RGBAI(0, 0, 0xFF, 0), RGBAI(0, 0, 0, 0xFF)), SDL_TEXTUREACCESS_STREAMING, w, h);
@@ -57,7 +91,7 @@ public:
             SDL_Quit();
             throw runtime_error(msg);
         }
-        imageRenderer = makeImageRenderer(w, h);
+        imageRenderer = makeImageRenderer(w, h, aspectRatio);
     }
     virtual ~SDLWindowRenderer()
     {
@@ -74,7 +108,7 @@ protected:
 public:
     virtual void calcScales() override
     {
-        Renderer::calcScales(w, h);
+        Renderer::calcScales(w, h, aspectRatio);
     }
     virtual void render(const Mesh &m) override
     {
@@ -134,7 +168,7 @@ public:
             {
                 throw runtime_error(string("SDL_CreateTexture Error : ") + SDL_GetError());
             }
-            imageRenderer->resize(w, h);
+            imageRenderer->resize(w, h, aspectRatio);
         }
     }
 };
@@ -577,9 +611,11 @@ while(0)
         glEnableClientState(GL_VERTEX_ARRAY);
     }
 
+    float aspectRatio;
+
     void setupContext()
     {
-        Renderer::calcScales(w, h);
+        Renderer::calcScales(w, h, aspectRatio);
         setupContext(w, h, scaleX(), scaleY(), 0);
     }
     bool writeDepth = true;
@@ -604,7 +640,7 @@ public:
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-        window = SDL_CreateWindow("lib3d", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 640, 480, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
+        window = SDL_CreateWindow("lib3d", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, getDefaultRendererWidth(), getDefaultRendererHeight(), SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
         if(window == nullptr)
         {
             string msg = string("SDL_CreateWindow Error : ") + SDL_GetError();
@@ -618,6 +654,7 @@ public:
         h = hi;
         if(w <= 0) w = 1;
         if(h <= 0) h = 1;
+        aspectRatio = getDefaultRendererAspectRatio();
         glContext = SDL_GL_CreateContext(window);
         if(glContext == nullptr)
         {
@@ -664,7 +701,7 @@ protected:
 public:
     virtual void calcScales() override
     {
-        Renderer::calcScales(w, h);
+        Renderer::calcScales(w, h, aspectRatio);
     }
     virtual void render(const Mesh &m) override
     {
@@ -921,9 +958,10 @@ class NullWindowRenderer : public WindowRenderer
 {
 private:
     size_t w, h;
+    float aspectRatio;
 public:
     NullWindowRenderer()
-        : w(640), h(480)
+        : w(getDefaultRendererWidth()), h(getDefaultRendererHeight()), aspectRatio(getDefaultRendererAspectRatio())
     {
     }
 protected:
@@ -937,7 +975,7 @@ protected:
 public:
     virtual void calcScales() override
     {
-        Renderer::calcScales(w, h);
+        Renderer::calcScales(w, h, aspectRatio);
     }
     virtual void render(const Mesh &m) override
     {
@@ -1003,6 +1041,7 @@ const Driver drivers[] =
     Driver("caca", makeCacaRenderer, makeSoftwareImageRenderer),
     Driver("aalib", makeLibAARenderer, makeSoftwareImageRenderer),
     Driver("null", []()->shared_ptr<WindowRenderer>{return make_shared<NullWindowRenderer>();}, makeSoftwareImageRenderer),
+    Driver("ffmpeg", makeFFmpegRenderer, makeSoftwareImageRenderer),
 };
 
 constexpr int driverCount = sizeof(drivers) / sizeof(drivers[0]);
@@ -1043,11 +1082,15 @@ shared_ptr<WindowRenderer> makeWindowRenderer()
                     driverIndex = i;
                     return retval;
                 }
+                exit(1);
                 break;
             }
         }
         if(!found)
+        {
             cout << "lib3d : can't find driver : " << driver << endl;
+            exit(1);
+        }
     }
     for(int i = 0; i < driverCount; i++)
     {

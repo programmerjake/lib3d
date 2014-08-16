@@ -13,7 +13,7 @@ private:
     shared_ptr<ImageRenderer> imageRenderer;
     vector<uint32_t> pixels;
     size_t w, h;
-    float aspectRatio;
+    float aspectRatio, defaultAspectRatio;
     size_t scaleFactor = 2;
     void makeDither()
     {
@@ -24,6 +24,7 @@ private:
     }
 public:
     CacaRenderer()
+        : defaultAspectRatio(getDefaultRendererAspectRatio())
     {
         display = caca_create_display(nullptr);
         if(display == nullptr)
@@ -40,7 +41,9 @@ public:
             caca_free_display(display);
             throw runtime_error("caca_create_dither failed");
         }
-        aspectRatio = 0.5 * w / h;
+        aspectRatio = defaultAspectRatio;
+        if(aspectRatio == -1)
+            aspectRatio = 0.5 * w / h;
         imageRenderer = makeImageRenderer(w, h, aspectRatio);
     }
     virtual ~CacaRenderer()
@@ -121,6 +124,9 @@ public:
         {
             w = wi;
             h = hi;
+            aspectRatio = defaultAspectRatio;
+            if(aspectRatio == -1)
+                aspectRatio = 0.5 * w / h;
             imageRenderer->resize(w, h, aspectRatio);
             pixels.resize(w * h, 0);
             caca_free_dither(dither);

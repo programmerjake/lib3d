@@ -116,6 +116,11 @@ struct ImageRenderer : public Renderer
     virtual void resize(size_t newW, size_t newH, float newAspectRatio = -1) = 0;
 };
 
+void setDefaultRendererSize(int w, int h, float aspectRatio = -1);
+int getDefaultRendererWidth();
+int getDefaultRendererHeight();
+float getDefaultRendererAspectRatio();
+
 shared_ptr<WindowRenderer> getWindowRenderer();
 shared_ptr<ImageRenderer> makeImageRenderer(size_t w, size_t h, float aspectRatio = -1);
 
