@@ -5,25 +5,36 @@ extern "C"
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#include <libavformat/avio.h>
+#include <libavutil/mathematics.h>
 }
 #include <fstream>
 #include <termios.h>
 #include <unistd.h>
 #include <sys/select.h>
 #include <iostream>
+#include <cstdlib>
+#include <cstdio>
+#include <thread>
+#include <condition_variable>
+#include <mutex>
 
 using namespace std;
 
 namespace
 {
 shared_ptr<string> ffmpegFileName;
-float ffmpegFrameRate = 30;
+float ffmpegFrameRate = -1;
+size_t ffmpegBitRate = 0;
 }
 
 string getFFmpegOutputFile()
 {
     if(ffmpegFileName)
         return *ffmpegFileName;
+    const char * retval = getenv("LIB3D_OUTPUT_FILE");
+    if(retval != nullptr && strlen(retval) != 0)
+        return retval;
     return "lib3d-output.mp4";
 }
 
@@ -41,10 +52,45 @@ void setFFmpegFrameRate(float fps)
 
 float getFFmpegFrameRate()
 {
-    return ffmpegFrameRate;
+    if(ffmpegFrameRate > 0)
+        return ffmpegFrameRate;
+    const char * retval = getenv("LIB3D_FFMPEG_FPS");
+    if(retval != nullptr)
+    {
+        float fps;
+        if(1 == sscanf(retval, " %g", &fps) && isfinite(fps) && fps > 1 && fps < 1000)
+            return fps;
+    }
+    return 24;
 }
 
-#if 0
+void setFFmpegBitRate(size_t bitRate)
+{
+    bitRate = max((size_t)20000, bitRate);
+    ffmpegBitRate = bitRate;
+}
+
+namespace
+{
+size_t getFFmpegBitRate(size_t pixelCount)
+{
+    if(ffmpegBitRate > 0)
+        return ffmpegBitRate;
+    const char * retval = getenv("LIB3D_FFMPEG_BITRATE");
+    if(retval != nullptr)
+    {
+        int bitRate;
+        if(1 == sscanf(retval, " %d", &bitRate))
+            return max((size_t)20000, (size_t)bitRate);
+    }
+    return 200000 + pixelCount;
+}
+}
+
+size_t getFFmpegBitRate()
+{
+    return getFFmpegBitRate(300000);
+}
 
 namespace
 {
@@ -91,23 +137,9 @@ class FFmpegRenderer : public WindowRenderer
         if(didInit)
             return;
         didInit = true;
-        avcodec_register_all();
         av_register_all();
     }
-    static AVCodec *findCodec(string name)
-    {
-        return avcodec_find_encoder_by_name(name.c_str());
-    }
-    static AVOutputFormat *findFormat(string name)
-    {
-        for(AVOutputFormat *retval = av_oformat_next(nullptr); retval; retval = av_oformat_next(retval))
-        {
-            if(retval->name == name)
-                return retval;
-        }
-        return nullptr;
-    }
-    void calcTimeBase()
+    static void calcTimeBase(const AVCodec *theCodec, AVCodecContext *theCodecContext, float &frameRate)
     {
         if(theCodec->supported_framerates == nullptr)
         {
@@ -159,81 +191,161 @@ class FFmpegRenderer : public WindowRenderer
             if(closestDistance == -1)
                 throw logic_error("ffmpeg codec has no valid time bases");
         }
+        frameRate = (float)theCodecContext->time_base.den / theCodecContext->time_base.num;
     }
-    void writeEncodedChunk(const void *buffer, size_t chunkSize)
+    void writePacket()
     {
-        theWriter->write(buffer, chunkSize);
+        size_t size = packetBuffer.size();
+        if(size > 0)
+        {
+            AVPacket thePacket;
+            av_init_packet(&thePacket);
+            if(theCodecContext->coded_frame->pts != (decltype(theCodecContext->coded_frame->pts))AV_NOPTS_VALUE)
+                thePacket.pts = av_rescale_q(theCodecContext->coded_frame->pts, theCodecContext->time_base, theStream->time_base);
+            if(theCodecContext->coded_frame->key_frame)
+                thePacket.flags |= AV_PKT_FLAG_KEY;
+            thePacket.stream_index = theStream->index;
+            thePacket.data = &packetBuffer[0];
+            thePacket.size = size;
+            if(av_interleaved_write_frame(theFormatContext, &thePacket) != 0)
+            {
+                throw runtime_error("can't write to output video");
+            }
+        }
     }
-    AVCodec *theCodec;
-    AVCodecContext *theCodecContext;
+    void encodeImageData()
+    {
+        AVPicture srcPicture;
+        avpicture_fill(&srcPicture, &imageData[0], PIX_FMT_RGB32, w, h);
+        sws_scale(swscaleContext, srcPicture.data, srcPicture.linesize, 0, h, picture->data, picture->linesize);
+        packetBuffer.resize(packetBuffer.capacity());
+        int size = avcodec_encode_video(theCodecContext, &packetBuffer[0], packetBuffer.size(), picture);
+        packetBuffer.resize(size);
+        writePacket();
+    }
+    void encoderThreadFn()
+    {
+        encoderLock.lock();
+        while(!done)
+        {
+            if(!hasImage)
+            {
+                encoderCond.wait(encoderLock);
+                continue;
+            }
+            encoderLock.unlock();
+            encodeImageData();
+            encoderLock.lock();
+            hasImage = false;
+            encoderCond.notify_all();
+        }
+        encoderLock.unlock();
+    }
     AVFrame *picture;
     SwsContext *swscaleContext;
     SwsFilter *defaultFilter;
     shared_ptr<ImageRenderer> imageRenderer;
     size_t w, h;
     float aspectRatio, frameRate;
-    AVDictionary *optionsDictionary;
     vector<uint8_t> imageData, packetBuffer;
     shared_ptr<KeyGetter> keyGetter;
-    AVOutputFormat *outputFormat;
     AVFormatContext *theFormatContext;
-    AVStream *videoStream;
+    AVStream *theStream;
+    AVOutputFormat *theFormat;
+    AVCodec *theCodec;
+    AVCodecContext *theCodecContext;
+    double deltaTime, currentTime = 0;
+    thread encoderThread;
+    bool done = false, hasImage = false;
+    mutex encoderLock;
+    condition_variable_any encoderCond;
 public:
-    FFmpegRenderer(string fileName = getFFmpegOutputFile(), string codec = getFFmpegOutputCodec(), string format = getFFmpegOutputFormat(), float frameRate = getFFmpegFrameRate())
-        : theWriter(theWriter), frameRate(frameRate), keyGetter(make_shared<KeyGetter>())
+    FFmpegRenderer(string fileName = getFFmpegOutputFile(), float frameRate = getFFmpegFrameRate())
+        : frameRate(frameRate), keyGetter(make_shared<KeyGetter>())
     {
         init();
         w = getDefaultRendererWidth();
         h = getDefaultRendererHeight();
         imageData.resize(4 * w * h); // rgba
-        packetBuffer.resize(1 << 20);
+        packetBuffer.reserve(1 << 18);
         aspectRatio = getDefaultRendererAspectRatio();
         imageRenderer = makeImageRenderer(w, h, aspectRatio);
-        theCodec = findCodec(codec);
-        if(theCodec == nullptr)
-            throw runtime_error("can't find codec " + codec);
-        outputFormat = findFormat(format);
-        if(outputFormat == nullptr)
-            throw runtime_error("can't find format " + format);
-        theCodecContext = avcodec_alloc_context3(theCodec);
-        if(theCodecContext == nullptr)
+
+        theFormat = av_guess_format(nullptr, fileName.c_str(), nullptr);
+        if(theFormat == nullptr)
         {
-            throw runtime_error("can't create codec context");
+            const char * const defaultFormat = "ogg";
+            cout << "can't guess format from filename : trying " << defaultFormat << endl;
+            theFormat = av_guess_format(defaultFormat, nullptr, nullptr);
         }
+        if(theFormat == nullptr)
+        {
+            throw runtime_error("can't find valid format");
+        }
+        else if(theFormat->video_codec == CODEC_ID_NONE)
+        {
+            throw runtime_error("format doesn't support video");
+        }
+        theFormatContext = avformat_alloc_context();
+        if(theFormatContext == nullptr)
+        {
+            throw runtime_error("can't allocate format context");
+        }
+        theFormatContext->oformat = theFormat;
+        strncpy(theFormatContext->filename, fileName.c_str(), sizeof(theFormatContext->filename));
+
+        theCodec = avcodec_find_encoder(theFormat->video_codec);
+        if(theCodec == nullptr)
+        {
+            avformat_free_context(theFormatContext);
+            throw runtime_error("can't find valid codec");
+        }
+
+        theStream = avformat_new_stream(theFormatContext, theCodec);
+        if(theStream == nullptr)
+        {
+            avformat_free_context(theFormatContext);
+            throw runtime_error("can't create stream");
+        }
+        theCodecContext = theStream->codec;
         theCodecContext->width = w;
         theCodecContext->height = h;
-        calcTimeBase();
+        theCodecContext->bit_rate = getFFmpegBitRate(w * h);
+        calcTimeBase(theCodec, theCodecContext, frameRate);
+        theStream->time_base = theCodecContext->time_base;
+        deltaTime = 1 / (double)frameRate;
+        this->frameRate = frameRate;
         assert(theCodec->pix_fmts);
         theCodecContext->pix_fmt = *theCodec->pix_fmts;
         picture = avcodec_alloc_frame();
         if(picture == nullptr)
         {
-            av_free(theCodecContext);
+            avformat_free_context(theFormatContext);
             throw runtime_error("can't allocate frame");
         }
         if(avpicture_alloc((AVPicture *)picture, theCodecContext->pix_fmt, w, h) < 0)
         {
-            av_free(theCodecContext);
             av_free(picture);
+            avformat_free_context(theFormatContext);
             throw runtime_error("can't allocate picture");
         }
-        optionsDictionary = nullptr;
-        if(avcodec_open2(theCodecContext, theCodec, &optionsDictionary) < 0)
+        if(theFormat->flags & AVFMT_GLOBALHEADER)
+            theCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
+
+        if(avcodec_open2(theCodecContext, theCodec, nullptr) < 0)
         {
-            av_dict_free(&optionsDictionary);
-            av_free(theCodecContext);
             avpicture_free((AVPicture *)picture);
             av_free(picture);
+            avformat_free_context(theFormatContext);
             throw runtime_error((string)"can't open codec " + theCodec->name);
         }
         defaultFilter = sws_getDefaultFilter(0, 0, 0, 0, 0, 0, 0);
         if(defaultFilter == nullptr)
         {
             avcodec_close(theCodecContext);
-            av_dict_free(&optionsDictionary);
-            av_free(theCodecContext);
             avpicture_free((AVPicture *)picture);
             av_free(picture);
+            avformat_free_context(theFormatContext);
             throw runtime_error("can't create default filter");
         }
         swscaleContext = sws_getCachedContext(nullptr, w, h, PIX_FMT_RGB32, w, h, theCodecContext->pix_fmt, SWS_BILINEAR, defaultFilter, defaultFilter, nullptr);
@@ -241,43 +353,52 @@ public:
         {
             sws_freeFilter(defaultFilter);
             avcodec_close(theCodecContext);
-            av_dict_free(&optionsDictionary);
-            av_free(theCodecContext);
             avpicture_free((AVPicture *)picture);
             av_free(picture);
+            avformat_free_context(theFormatContext);
             throw runtime_error("can't create swscale context");
         }
-        theFormatContext = avformat_alloc_context();
-        if(theFormatContext == nullptr)
+        if((theFormat->flags & AVFMT_NOFILE) == 0 && avio_open(&theFormatContext->pb, fileName.c_str(), AVIO_FLAG_WRITE) < 0)
         {
             sws_freeContext(swscaleContext);
             sws_freeFilter(defaultFilter);
             avcodec_close(theCodecContext);
-            av_dict_free(&optionsDictionary);
-            av_free(theCodecContext);
             avpicture_free((AVPicture *)picture);
             av_free(picture);
+            avformat_free_context(theFormatContext);
+            throw runtime_error("can't write to '" + fileName + "'");
         }
-        theFormatContext->oformat = outputFormat;
-        videoStream = avformat_new_stream(theFormatContext, theCodec);
+
+        avformat_write_header(theFormatContext, nullptr);
+        encoderThread = thread(&FFmpegRenderer::encoderThreadFn, this);
     }
     virtual ~FFmpegRenderer()
     {
+        encoderLock.lock();
+        done = true;
+        encoderCond.notify_all();
+        encoderLock.unlock();
+        encoderThread.join();
         for(;;)
         {
+            packetBuffer.resize(packetBuffer.capacity());
             int size = avcodec_encode_video(theCodecContext, &packetBuffer[0], packetBuffer.size(), nullptr);
+            packetBuffer.resize(size);
             if(size == 0)
                 break;
-            writeEncodedChunk((const void *)&packetBuffer[0], size);
+            writePacket();
         }
-        av_free(theFormatContext);
+        av_write_trailer(theFormatContext);
+        if((theFormat->flags & AVFMT_NOFILE) == 0)
+        {
+            avio_close(theFormatContext->pb);
+        }
         sws_freeContext(swscaleContext);
         sws_freeFilter(defaultFilter);
         avcodec_close(theCodecContext);
-        av_dict_free(&optionsDictionary);
-        av_free(theCodecContext);
         avpicture_free((AVPicture *)picture);
         av_free(picture);
+        avformat_free_context(theFormatContext);
     }
 protected:
     virtual void clearInternal(ColorF bg) override
@@ -300,10 +421,16 @@ public:
     virtual void flip() override
     {
         shared_ptr<const Image> pimage = imageRenderer->finish()->getImage();
+        currentTime += deltaTime;
         assert(pimage != nullptr);
         const Image & image = *pimage;
         assert(image.w == w);
         assert(image.h == h);
+        encoderLock.lock();
+        while(hasImage)
+        {
+            encoderCond.wait(encoderLock);
+        }
         uint32_t *imageDataPtr = (uint32_t *)&imageData[0];
         for(size_t y = 0; y < h; y++)
         {
@@ -312,24 +439,24 @@ public:
                 *imageDataPtr++ = (uint32_t)image.getPixel(x, y);
             }
         }
-        AVPicture srcPicture;
-        avpicture_fill(&srcPicture, &imageData[0], PIX_FMT_RGB32, w, h);
-        sws_scale(swscaleContext, srcPicture.data, srcPicture.linesize, 0, h, picture->data, picture->linesize);
-        int size = avcodec_encode_video(theCodecContext, &packetBuffer[0], packetBuffer.size(), picture);
-        if(size > 0)
-            writeEncodedChunk((const void *)&packetBuffer[0], size);
+        hasImage = true;
+        encoderCond.notify_all();
+        encoderLock.unlock();
+
         while(keyGetter->kbhit())
         {
             int ch = keyGetter->getch();
             if(ch == 0x1B || ch == 'q' || ch == 'Q' || ch == 0x3)
                 exit(0);
         }
+        cout << timer() << "\x1b[K\r" << flush;
+    }
+    virtual double timer() override
+    {
+        return currentTime;
     }
 };
 }
-#else
-#warning finish implementing ffmpeg renderer
-#endif
 
 shared_ptr<WindowRenderer> makeFFmpegRenderer()
 {

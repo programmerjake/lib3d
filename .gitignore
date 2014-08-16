@@ -5,3 +5,7 @@ obj
 bin
 core
 *.gmon
+*.ogg
+*.mp4
+*.mpg
+lib3d-output.*

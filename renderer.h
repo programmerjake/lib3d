@@ -6,7 +6,7 @@
 
 using namespace std;
 
-inline double timer()
+inline double realTimer()
 {
     auto timePointInNanoseconds = chrono::time_point_cast<chrono::nanoseconds>(chrono::steady_clock::now());
     return 1e-9 * timePointInNanoseconds.time_since_epoch().count();
@@ -40,12 +40,12 @@ protected:
     {
         if(lastFlipTime == -1)
         {
-            lastFlipTime = timer();
+            lastFlipTime = realTimer();
             frameCount = 0;
             return;
         }
         frameCount++;
-        double time = timer();
+        double time = realTimer();
         if(time - lastFlipTime > 0.01)
         {
             fps = frameCount / (time - lastFlipTime);
@@ -108,6 +108,10 @@ public:
 struct WindowRenderer : public Renderer
 {
     virtual void flip() = 0;
+    virtual double timer()
+    {
+        return realTimer();
+    }
 };
 
 struct ImageRenderer : public Renderer
@@ -123,5 +127,10 @@ float getDefaultRendererAspectRatio();
 
 shared_ptr<WindowRenderer> getWindowRenderer();
 shared_ptr<ImageRenderer> makeImageRenderer(size_t w, size_t h, float aspectRatio = -1);
+
+inline double timer()
+{
+    return getWindowRenderer()->timer();
+}
 
 #endif // RENDERER_H_INCLUDED

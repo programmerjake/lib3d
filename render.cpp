@@ -16,8 +16,27 @@ using namespace std;
 
 namespace
 {
-int defaultRendererWidth = 640, defaultRendererHeight = 480;
+int defaultRendererWidth = -1, defaultRendererHeight = -1;
 float defaultRendererAspectRatio = -1;
+
+void getDefaultRendererSize(int &w, int &h)
+{
+    if(defaultRendererWidth < 0)
+    {
+        const char * str = getenv("LIB3D_RESOLUTION");
+        if(str == nullptr)
+            str = "";
+        if(2 == sscanf(str, " %ix%i", &w, &h) && w > 0 && h > 0)
+        {
+            w += w & 1; // round up to even width
+            return;
+        }
+        w = 640;
+        h = 480;
+    }
+    w = defaultRendererWidth;
+    h = defaultRendererHeight;
+}
 }
 
 void setDefaultRendererSize(int w, int h, float aspectRatio)
@@ -31,12 +50,16 @@ void setDefaultRendererSize(int w, int h, float aspectRatio)
 
 int getDefaultRendererWidth()
 {
-    return defaultRendererWidth;
+    int w, h;
+    getDefaultRendererSize(w, h);
+    return w;
 }
 
 int getDefaultRendererHeight()
 {
-    return defaultRendererHeight;
+    int w, h;
+    getDefaultRendererSize(w, h);
+    return h;
 }
 
 float getDefaultRendererAspectRatio()
@@ -1109,6 +1132,7 @@ shared_ptr<WindowRenderer> makeWindowRenderer()
 shared_ptr<WindowRenderer> getWindowRendererInternal()
 {
     static shared_ptr<WindowRenderer> theWindowRenderer = nullptr;
+    static shared_ptr<WindowRenderer> theWindowRendererReference = nullptr;
     static bool makingIt = false;
     if(theWindowRenderer == nullptr && !makingIt)
     {
@@ -1123,6 +1147,9 @@ shared_ptr<WindowRenderer> getWindowRendererInternal()
             throw;
         }
         makingIt = false;
+        theWindowRendererReference = theWindowRenderer;
+        theWindowRenderer = shared_ptr<WindowRenderer>(theWindowRendererReference.get(), [](WindowRenderer *){});
+        atexit([](){theWindowRendererReference = nullptr;});
     }
     return theWindowRenderer;
 }
