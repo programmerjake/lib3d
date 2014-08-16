@@ -33,6 +33,7 @@ void getDefaultRendererSize(int &w, int &h)
         }
         w = 640;
         h = 480;
+        return;
     }
     w = defaultRendererWidth;
     h = defaultRendererHeight;
