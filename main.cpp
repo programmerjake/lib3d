@@ -94,12 +94,12 @@ int main()
     {
         TextureDescriptor td(testTexture);
         m2 = (shared_ptr<Mesh>)transform(Matrix::translate(VectorF(-0.5)).concat(Matrix::scale(2 * 10)), Generate::unitBox(td, td, td, td, td, td));
-        imageRenderer = makeImageRenderer(256, 256);
+        imageRenderer = makeImageRenderer(1024, 1024);
     }
     else
     {
         m2 = makeSphereMesh(24, 12, 16, testTexture);
-        imageRenderer = makeImageRenderer(512, 256);
+        imageRenderer = makeImageRenderer(2048, 1024);
     }
 
     double startTime = timer();

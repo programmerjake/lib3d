@@ -148,9 +148,162 @@ private:
     size_t w, h;
     bool supportsExtFrameBufferObjects;
     vector<float> vertexArray, textureCoordArray, colorArray;
+
+    template <typename... Args>
+    static void debugDumpGLInternal(Args... args);
+
+    template <typename T, typename... Args>
+    static void debugDumpGLInternal(T arg1, Args ... args)
+    {
+#if 0
+        cout << arg1;
+#endif
+        debugDumpGLInternal(args...);
+    }
+
+    static void debugDumpGLInternal()
+    {
+    }
+
+    template <typename... Args>
+    static void debugDumpGL(Args... args)
+    {
+        debugDumpGLInternal(args..., "\n");
+    }
+
+    template <typename T>
+    static void dumpGLArg(size_t, T arg)
+    {
+        debugDumpGL(arg);
+    }
+
+    static void dumpGLArg(size_t, int arg)
+    {
+        debugDumpGL(arg, " 0x", hex, arg, dec);
+    }
+
+    static void dumpGLArg(size_t, unsigned arg)
+    {
+        debugDumpGL(arg, " 0x", hex, arg, dec);
+    }
+
+    static void dumpGLArg(size_t, short arg)
+    {
+        debugDumpGL(arg, " 0x", hex, arg, dec);
+    }
+
+    static void dumpGLArg(size_t, unsigned short arg)
+    {
+        debugDumpGL(arg, " 0x", hex, arg, dec);
+    }
+
+    static void dumpGLArg(size_t, signed char arg)
+    {
+        debugDumpGL((int)arg, " 0x", hex, (int)arg, dec);
+    }
+
+    static void dumpGLArg(size_t, unsigned char arg)
+    {
+        debugDumpGL((unsigned)arg, " 0x", hex, (unsigned)arg, dec);
+    }
+
+    static void dumpGLArg(size_t, char arg)
+    {
+        debugDumpGL((unsigned)arg, " 0x", hex, (unsigned)arg, dec);
+    }
+
+    template <typename... Args>
+    static void dumpGLArgs(size_t n, Args... args);
+
+    template <typename Arg1, typename... Args>
+    static void dumpGLArgs(size_t n, Arg1 arg1, Args... args)
+    {
+        dumpGLArg(n, arg1);
+        dumpGLArgs(n + 1, args...);
+    }
+
+    static void dumpGLArgs(size_t n)
+    {
+    }
+
+    template <typename T>
+    static T dumpGLReturnValue(T v)
+    {
+        debugDumpGL(" -> ", v);
+        return v;
+    }
+
+    template <typename ReturnType, typename... Args>
+    struct DumpGLStruct
+    {
+        const char * name;
+        ReturnType (APIENTRY * fn)(Args...);
+        constexpr DumpGLStruct(const char * name, ReturnType (APIENTRY * fn)(Args...))
+            : name(name), fn(fn)
+        {
+        }
+        void init(ReturnType (APIENTRY * fn)(Args...))
+        {
+            this->fn = fn;
+        }
+        constexpr DumpGLStruct()
+            : name(""), fn(nullptr)
+        {
+        }
+        ReturnType operator ()(Args... args) const
+        {
+            debugDumpGL(name, " : ");
+            dumpGLArgs(1, args...);
+            return dumpGLReturnValue(fn(args...));
+        }
+    };
+    template <typename... Args>
+    struct DumpGLStruct<void, Args...>
+    {
+        const char * name;
+        void (APIENTRY * fn)(Args...);
+        constexpr DumpGLStruct(const char * name, void (APIENTRY * fn)(Args...))
+            : name(name), fn(fn)
+        {
+        }
+        void init(void (APIENTRY * fn)(Args...))
+        {
+            this->fn = fn;
+        }
+        constexpr DumpGLStruct()
+            : name(""), fn(nullptr)
+        {
+        }
+        void operator ()(Args... args) const
+        {
+            debugDumpGL(name, " : ");
+            dumpGLArgs(1, args...);
+            fn(args...);
+        }
+    };
+    template <typename ReturnType, typename... Args>
+    static constexpr DumpGLStruct<ReturnType, Args...> makeDumpGLStruct(const char * name, ReturnType (APIENTRY * fn)(Args...))
+    {
+        return DumpGLStruct<ReturnType, Args...>(name, fn);
+    }
 #define DECLARE_GL_FUNCTION(retType, fn, args) \
-    typedef retType (APIENTRY * fn ## Type)args; \
-    fn ## Type fn = nullptr
+typedef retType (APIENTRY * fn ## Type)args; \
+fn ## Type fn ## Ptr = nullptr; \
+static const char * fn ## NameString() \
+{ \
+    return #retType " " #fn #args; \
+} \
+decltype(makeDumpGLStruct(#retType " " #fn #args, fn ## Ptr)) fn
+
+#define LOAD_GL_FUNCTION(fn) \
+do \
+{ \
+    fn ## Ptr = (fn ## Type)SDL_GL_GetProcAddress(#fn); \
+    if(!fn ## Ptr) \
+        throw runtime_error("can't load" #fn); \
+    fn = makeDumpGLStruct(fn ## NameString(), fn ## Ptr);\
+} \
+while(0)
 
     DECLARE_GL_FUNCTION(void, glEnable, (GLenum cap));
     DECLARE_GL_FUNCTION(void, glEnableClientState, (GLenum cap));
@@ -198,15 +351,6 @@ private:
 
     void loadFunctions()
     {
-#define LOAD_GL_FUNCTION(fn) \
-        do \
-        { \
-        fn = (fn ## Type)SDL_GL_GetProcAddress(#fn); \
-        if(!fn) \
-            throw runtime_error("can't load" #fn); \
-        } \
-        while(0)
-
         LOAD_GL_FUNCTION(glEnable);
         LOAD_GL_FUNCTION(glEnableClientState);
         LOAD_GL_FUNCTION(glDepthFunc);
@@ -237,6 +381,7 @@ private:
         LOAD_GL_FUNCTION(glTexImage2D);
         LOAD_GL_FUNCTION(glTexSubImage2D);
         LOAD_GL_FUNCTION(glGetTexImage);
+        LOAD_GL_FUNCTION(glCopyTexSubImage2D);
         supportsExtFrameBufferObjects = SDL_GL_ExtensionSupported("GL_EXT_framebuffer_object");
         if(supportsExtFrameBufferObjects)
         {
@@ -772,6 +917,40 @@ public:
     }
 };
 
+class NullWindowRenderer : public WindowRenderer
+{
+private:
+    size_t w, h;
+public:
+    NullWindowRenderer()
+        : w(640), h(480)
+    {
+    }
+protected:
+    virtual void clearInternal(ColorF bg) override
+    {
+    }
+    virtual void onSetFPS() override
+    {
+        cout << "FPS: " << fps << "\x1b[K\r" << flush;
+    }
+public:
+    virtual void calcScales() override
+    {
+        Renderer::calcScales(w, h);
+    }
+    virtual void render(const Mesh &m) override
+    {
+    }
+    virtual void enableWriteDepth(bool v) override
+    {
+    }
+    virtual void flip() override
+    {
+        calcFPS();
+    }
+};
+
 shared_ptr<ImageRenderer> makeSoftwareImageRenderer(size_t w, size_t h, float aspectRatio)
 {
     return make_shared<SoftwareRenderer>(w, h, aspectRatio);
@@ -779,7 +958,7 @@ shared_ptr<ImageRenderer> makeSoftwareImageRenderer(size_t w, size_t h, float as
 
 shared_ptr<ImageRenderer> makeOpenGLImageRenderer(size_t w, size_t h, float aspectRatio)
 {
-#if 0
+#if 1
     try
     {
         return make_shared<OpenGLImageRenderer>(w, h, aspectRatio);
@@ -819,9 +998,11 @@ struct Driver
 const Driver drivers[] =
 {
     Driver("opengl", []()->shared_ptr<WindowRenderer>{return make_shared<OpenGLWindowRenderer>();}, makeOpenGLImageRenderer),
+    Driver("opengl-no-fbo", []()->shared_ptr<WindowRenderer>{return make_shared<OpenGLWindowRenderer>();}, makeSoftwareImageRenderer),
     Driver("sdl", []()->shared_ptr<WindowRenderer>{return make_shared<SDLWindowRenderer>();}, makeSoftwareImageRenderer),
     Driver("caca", makeCacaRenderer, makeSoftwareImageRenderer),
     Driver("aalib", makeLibAARenderer, makeSoftwareImageRenderer),
+    Driver("null", []()->shared_ptr<WindowRenderer>{return make_shared<NullWindowRenderer>();}, makeSoftwareImageRenderer),
 };
 
 constexpr int driverCount = sizeof(drivers) / sizeof(drivers[0]);
@@ -840,6 +1021,14 @@ shared_ptr<WindowRenderer> makeWindowRenderer()
 {
     string driver = getDriverEnvVar();
     shared_ptr<WindowRenderer> retval = nullptr;
+    if(driver == "list")
+    {
+        cout << "lib3d drivers :";
+        for(int i = 0; i < driverCount; i++)
+            cout << " " << drivers[i].name;
+        cout << endl;
+        exit(0);
+    }
     if(driver != "")
     {
         bool found = false;
@@ -873,18 +1062,38 @@ shared_ptr<WindowRenderer> makeWindowRenderer()
     exit(1);
     return nullptr;
 }
+
+shared_ptr<WindowRenderer> getWindowRendererInternal()
+{
+    static shared_ptr<WindowRenderer> theWindowRenderer = nullptr;
+    static bool makingIt = false;
+    if(theWindowRenderer == nullptr && !makingIt)
+    {
+        makingIt = true;
+        try
+        {
+            theWindowRenderer = makeWindowRenderer();
+        }
+        catch(...)
+        {
+            makingIt = false;
+            throw;
+        }
+        makingIt = false;
+    }
+    return theWindowRenderer;
+}
 }
 
 shared_ptr<WindowRenderer> getWindowRenderer()
 {
-    static shared_ptr<WindowRenderer> theWindowRenderer = nullptr;
-    if(theWindowRenderer == nullptr)
-        theWindowRenderer = makeWindowRenderer();
-    return theWindowRenderer;
+    return getWindowRendererInternal();
 }
 
 shared_ptr<ImageRenderer> makeImageRenderer(size_t w, size_t h, float aspectRatio)
 {
+    if(driverIndex == -1)
+        getWindowRendererInternal();
     if(driverIndex == -1)
         return make_shared<SoftwareRenderer>(w, h, aspectRatio);
     return drivers[driverIndex].makeImageRenderer(w, h, aspectRatio);
