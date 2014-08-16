@@ -33,11 +33,11 @@
 			<Add option="-std=c++11" />
 			<Add option="-Wall" />
 			<Add option="-fexceptions -mfpmath=sse -funsafe-math-optimizations `sdl2-config --cflags`" />
-			<Add option="`pkg-config libavcodec libavformat --cflags`" />
+			<Add option="`pkg-config libavcodec libavformat libavutil libswscale--cflags`" />
 		</Compiler>
 		<Linker>
+			<Add option="`pkg-config libavcodec libavformat libavutil libswscale --libs`" />
 			<Add option="`sdl2-config --libs`" />
-			<Add option="`pkg-config libavcodec libavformat --libs`" />
 			<Add library="aa" />
 			<Add library="caca" />
 		</Linker>

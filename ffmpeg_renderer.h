@@ -5,10 +5,6 @@
 
 void setFFmpegOutputFile(string fileName);
 string getFFmpegOutputFile();
-void setFFmpegOutputFormat(string format);
-string getFFmpegOutputFormat();
-void setFFmpegOutputCodec(string codec);
-string getFFmpegOutputCodec();
 void setFFmpegFrameRate(float fps);
 float getFFmpegFrameRate();
 shared_ptr<WindowRenderer> makeFFmpegRenderer();
