@@ -1090,6 +1090,7 @@ class FFmpegOpenGLRenderer : public WindowRenderer
             renderCharacter(dest, x++, y, ch);
         }
     }
+    double lastDisplayStatsTime = -1;
 public:
     FFmpegOpenGLRenderer()
         : openGLRenderer(make_shared<OpenGLWindowRenderer>(128, 96))
@@ -1120,6 +1121,10 @@ public:
     {
         ffmpegRenderer->flip();
         calcFPS();
+        double currentTime = realTimer();
+        if(currentTime - 0.1 < lastDisplayStatsTime)
+            return;
+        lastDisplayStatsTime = currentTime;
         openGLRenderer->clear(GrayscaleF(0.75));
         ostringstream os;
         os << timer();
