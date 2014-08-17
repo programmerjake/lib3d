@@ -26,6 +26,7 @@ namespace
 shared_ptr<string> ffmpegFileName;
 float ffmpegFrameRate = -1;
 size_t ffmpegBitRate = 0;
+function<void(void)> ffmpegRenderStatusCallback = nullptr;
 }
 
 string getFFmpegOutputFile()
@@ -70,6 +71,17 @@ void setFFmpegBitRate(size_t bitRate)
     ffmpegBitRate = bitRate;
 }
 
+void registerFFmpegRenderStatusCallback(function<void(void)> fn)
+{
+    if(ffmpegRenderStatusCallback == nullptr)
+        ffmpegRenderStatusCallback = fn;
+    else
+    {
+        function<void(void)> prevFn = ffmpegRenderStatusCallback;
+        ffmpegRenderStatusCallback = [fn, prevFn](){prevFn(); fn();};
+    }
+}
+
 namespace
 {
 size_t getFFmpegBitRate(size_t pixelCount)
@@ -83,7 +95,7 @@ size_t getFFmpegBitRate(size_t pixelCount)
         if(1 == sscanf(retval, " %d", &bitRate))
             return max((size_t)20000, (size_t)bitRate);
     }
-    return 200000 + pixelCount;
+    return (200000 + pixelCount) * getFFmpegFrameRate() / 24;
 }
 }
 
@@ -260,7 +272,7 @@ class FFmpegRenderer : public WindowRenderer
     mutex encoderLock;
     condition_variable_any encoderCond;
 public:
-    FFmpegRenderer(string fileName = getFFmpegOutputFile(), float frameRate = getFFmpegFrameRate())
+    FFmpegRenderer(function<shared_ptr<ImageRenderer>(size_t w, size_t h, float aspectRatio)> imageRendererMaker, string fileName = getFFmpegOutputFile(), float frameRate = getFFmpegFrameRate())
         : frameRate(frameRate), keyGetter(make_shared<KeyGetter>())
     {
         init();
@@ -269,7 +281,7 @@ public:
         imageData.resize(4 * w * h); // rgba
         packetBuffer.reserve(1 << 18);
         aspectRatio = getDefaultRendererAspectRatio();
-        imageRenderer = makeImageRenderer(w, h, aspectRatio);
+        imageRenderer = imageRendererMaker(w, h, aspectRatio);
 
         theFormat = av_guess_format(nullptr, fileName.c_str(), nullptr);
         if(theFormat == nullptr)
@@ -332,7 +344,10 @@ public:
         if(theFormat->flags & AVFMT_GLOBALHEADER)
             theCodecContext->flags |= CODEC_FLAG_GLOBAL_HEADER;
 
-        if(avcodec_open2(theCodecContext, theCodec, nullptr) < 0)
+        AVDictionary *options = nullptr;
+        av_dict_set(&options, "threads", "auto", 0);
+
+        if(avcodec_open2(theCodecContext, theCodec, &options) < 0)
         {
             avpicture_free((AVPicture *)picture);
             av_free(picture);
@@ -449,16 +464,21 @@ public:
             if(ch == 0x1B || ch == 'q' || ch == 'Q' || ch == 0x3)
                 exit(0);
         }
-        cout << timer() << "\x1b[K\r" << flush;
+        if(ffmpegRenderStatusCallback)
+            ffmpegRenderStatusCallback();
     }
     virtual double timer() override
     {
         return currentTime;
     }
+    virtual shared_ptr<Texture> preloadTexture(shared_ptr<Texture> texture) override
+    {
+        return imageRenderer->preloadTexture(texture);
+    }
 };
 }
 
-shared_ptr<WindowRenderer> makeFFmpegRenderer()
+shared_ptr<WindowRenderer> makeFFmpegRenderer(function<shared_ptr<ImageRenderer>(size_t w, size_t h, float aspectRatio)> imageRendererMaker)
 {
-    return make_shared<FFmpegRenderer>();
+    return make_shared<FFmpegRenderer>(imageRendererMaker);
 }

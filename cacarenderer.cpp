@@ -134,6 +134,10 @@ public:
             assert(dither != nullptr);
         }
     }
+    virtual shared_ptr<Texture> preloadTexture(shared_ptr<Texture> texture) override
+    {
+        return imageRenderer->preloadTexture(texture);
+    }
 };
 }
 

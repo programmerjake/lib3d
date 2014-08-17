@@ -40,6 +40,7 @@
 			<Add option="`sdl2-config --libs`" />
 			<Add library="aa" />
 			<Add library="caca" />
+			<Add library="freeimage" />
 		</Linker>
 		<Unit filename="cacarenderer.cpp" />
 		<Unit filename="cacarenderer.h" />

@@ -36,6 +36,11 @@ protected:
     virtual void onSetFPS()
     {
     }
+    void copyScales(const Renderer &otherRenderer)
+    {
+        scaleXValue = otherRenderer.scaleXValue;
+        scaleYValue = otherRenderer.scaleYValue;
+    }
     void calcFPS()
     {
         if(lastFlipTime == -1)

@@ -11,6 +11,8 @@
 #include <string>
 #include <GL/gl.h>
 #include <functional>
+#include <sstream>
+#include "generate.h"
 
 using namespace std;
 
@@ -645,7 +647,7 @@ while(0)
     bool writeDepth = true;
 public:
     static OpenGLWindowRenderer * windowRenderer;
-    OpenGLWindowRenderer()
+    OpenGLWindowRenderer(int defaultWidth = getDefaultRendererWidth(), int defaultHeight = getDefaultRendererHeight(), float defaultAspectRatio = getDefaultRendererAspectRatio())
     {
         if(SDL_Init(SDL_INIT_VIDEO) != 0)
         {
@@ -664,7 +666,7 @@ public:
         SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 1);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
-        window = SDL_CreateWindow("lib3d", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, getDefaultRendererWidth(), getDefaultRendererHeight(), SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
+        window = SDL_CreateWindow("lib3d", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, defaultWidth, defaultHeight, SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
         if(window == nullptr)
         {
             string msg = string("SDL_CreateWindow Error : ") + SDL_GetError();
@@ -678,7 +680,7 @@ public:
         h = hi;
         if(w <= 0) w = 1;
         if(h <= 0) h = 1;
-        aspectRatio = getDefaultRendererAspectRatio();
+        aspectRatio = defaultAspectRatio;
         glContext = SDL_GL_CreateContext(window);
         if(glContext == nullptr)
         {
@@ -1020,7 +1022,6 @@ shared_ptr<ImageRenderer> makeSoftwareImageRenderer(size_t w, size_t h, float as
 
 shared_ptr<ImageRenderer> makeOpenGLImageRenderer(size_t w, size_t h, float aspectRatio)
 {
-#if 1
     try
     {
         return make_shared<OpenGLImageRenderer>(w, h, aspectRatio);
@@ -1028,9 +1029,6 @@ shared_ptr<ImageRenderer> makeOpenGLImageRenderer(size_t w, size_t h, float aspe
     catch(exception & e)
     {
     }
-#else
-#warning finish OpenGLImageRenderer
-#endif
     return makeSoftwareImageRenderer(w, h, aspectRatio);
 }
 
@@ -1057,6 +1055,99 @@ struct Driver
     }
 };
 
+shared_ptr<WindowRenderer> makeFFmpegNoOpenGLRenderer()
+{
+    shared_ptr<WindowRenderer> retval = makeFFmpegRenderer();
+    registerFFmpegRenderStatusCallback([]()
+    {
+        cout << timer() << "\x1b[K\r" << flush;
+    });
+    return retval;
+}
+
+class FFmpegOpenGLRenderer : public WindowRenderer
+{
+    shared_ptr<WindowRenderer> ffmpegRenderer;
+    shared_ptr<WindowRenderer> openGLRenderer;
+    shared_ptr<Texture> fontTexture;
+    void renderCharacter(Mesh &dest, int x, int y, char ch)
+    {
+        TextureDescriptor td = getFFmpegOpenGLRendererFontCharacterTextureDescriptor(ch, fontTexture);
+        if(!td)
+            return;
+        ColorF c = RGBF(0, 0, 0);
+        dest.append(Generate::quadrilateral(td,
+                                            VectorF(0 + x, 0 + y, 0), c,
+                                            VectorF(1 + x, 0 + y, 0), c,
+                                            VectorF(1 + x, 1 + y, 0), c,
+                                            VectorF(0 + x, 1 + y, 0), c
+                                            ));
+    }
+    void renderText(Mesh &dest, int x, int y, string str)
+    {
+        for(char ch : str)
+        {
+            renderCharacter(dest, x++, y, ch);
+        }
+    }
+public:
+    FFmpegOpenGLRenderer()
+        : openGLRenderer(make_shared<OpenGLWindowRenderer>(128, 96))
+    {
+        ffmpegRenderer = makeFFmpegRenderer(makeOpenGLImageRenderer);
+        fontTexture = openGLRenderer->preloadTexture(make_shared<ImageTexture>(Image::loadImage("ffmpeg-opengl-renderer-font.png")));
+    }
+protected:
+    virtual void clearInternal(ColorF bg) override
+    {
+        ffmpegRenderer->clear(bg);
+    }
+public:
+    virtual void calcScales() override
+    {
+        ffmpegRenderer->calcScales();
+        copyScales(*ffmpegRenderer);
+    }
+    virtual void render(const Mesh &m) override
+    {
+        ffmpegRenderer->render(m);
+    }
+    virtual void enableWriteDepth(bool v) override
+    {
+        ffmpegRenderer->enableWriteDepth(v);
+    }
+    virtual void flip() override
+    {
+        ffmpegRenderer->flip();
+        calcFPS();
+        openGLRenderer->clear(GrayscaleF(0.75));
+        ostringstream os;
+        os << timer();
+        string str = os.str();
+        str.resize(10, ' ');
+        if(str != "")
+        {
+            Mesh mesh;
+            renderText(mesh, 0, 0, str);
+            openGLRenderer->render((Mesh)transform(Matrix::translate(-0.5 * str.size(), -0.5, 0).concat(Matrix::scale(2.0 / str.size())).concat(Matrix::translate(0, 0, -1)), mesh));
+        }
+        openGLRenderer->flip();
+    }
+    virtual double timer() override
+    {
+        return ffmpegRenderer->timer();
+    }
+    virtual shared_ptr<Texture> preloadTexture(shared_ptr<Texture> texture) override
+    {
+        return ffmpegRenderer->preloadTexture(texture);
+    }
+};
+
+shared_ptr<WindowRenderer> makeFFmpegOpenGLRenderer()
+{
+    return make_shared<FFmpegOpenGLRenderer>();
+}
+
 const Driver drivers[] =
 {
     Driver("opengl", []()->shared_ptr<WindowRenderer>{return make_shared<OpenGLWindowRenderer>();}, makeOpenGLImageRenderer),
@@ -1065,7 +1156,8 @@ const Driver drivers[] =
     Driver("caca", makeCacaRenderer, makeSoftwareImageRenderer),
     Driver("aalib", makeLibAARenderer, makeSoftwareImageRenderer),
     Driver("null", []()->shared_ptr<WindowRenderer>{return make_shared<NullWindowRenderer>();}, makeSoftwareImageRenderer),
-    Driver("ffmpeg", makeFFmpegRenderer, makeSoftwareImageRenderer),
+    Driver("ffmpeg", makeFFmpegOpenGLRenderer, makeOpenGLImageRenderer),
+    Driver("ffmpeg-no-opengl", makeFFmpegNoOpenGLRenderer, makeSoftwareImageRenderer),
 };
 
 constexpr int driverCount = sizeof(drivers) / sizeof(drivers[0]);
@@ -1080,9 +1172,8 @@ string getDriverEnvVar()
     return retval;
 }
 
-shared_ptr<WindowRenderer> makeWindowRenderer()
+shared_ptr<WindowRenderer> makeWindowRenderer(string driver = getDriverEnvVar())
 {
-    string driver = getDriverEnvVar();
     shared_ptr<WindowRenderer> retval = nullptr;
     if(driver == "list")
     {
@@ -1105,6 +1196,10 @@ shared_ptr<WindowRenderer> makeWindowRenderer()
                 {
                     driverIndex = i;
                     return retval;
+                }
+                if(driver == "ffmpeg")
+                {
+                    return makeWindowRenderer("ffmpeg-no-opengl");
                 }
                 exit(1);
                 break;

@@ -731,7 +731,7 @@ struct TextureDescriptor
     {
     }
     TextureDescriptor(shared_ptr<Texture> image, float minU, float maxU, float minV, float maxV)
-        : image(image), minU(0), minV(0), maxU(1), maxV(1)
+        : image(image), minU(minU), minV(minV), maxU(maxU), maxV(maxV)
     {
     }
     operator bool() const
@@ -743,5 +743,7 @@ struct TextureDescriptor
         return image == nullptr;
     }
 };
+
+TextureDescriptor getFFmpegOpenGLRendererFontCharacterTextureDescriptor(char ch, shared_ptr<Texture> texture);
 
 #endif // IMAGE_H_INCLUDED

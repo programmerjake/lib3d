@@ -114,6 +114,10 @@ public:
             imageRenderer->resize(w, h, aspectRatio);
         }
     }
+    virtual shared_ptr<Texture> preloadTexture(shared_ptr<Texture> texture) override
+    {
+        return imageRenderer->preloadTexture(texture);
+    }
 };
 }
 
