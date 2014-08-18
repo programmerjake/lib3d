@@ -1,6 +1,7 @@
 #include "softrender.h"
 #include <utility>
 #include <iostream>
+#include <thread>
 
 using namespace std;
 
@@ -22,10 +23,9 @@ inline Triangle gridify(Triangle tri)
 }
 }
 
-void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<const Image> texture)
+void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, size_t sectionBottom, shared_ptr<const Image> texture)
 {
-    triangles.push_back(TriangleDescriptor());
-    TriangleDescriptor &triangle = triangles.back();
+    TriangleDescriptor triangle;
     triangle.texture = texture;
     Triangle &tri = triangle.tri;
     size_t w = image->w, h = image->h;
@@ -66,7 +66,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, shared_ptr<const Imag
     size_t textureW = texture->w;
     size_t textureH = texture->h;
 
-    size_t startY = 0, endY = h - 1;
+    size_t startY = sectionTop, endY = sectionBottom - 1;
     if(tri.p1.z < -eps && tri.p2.z < -eps && tri.p3.z < -eps)
     {
         float y[3] = {-tri.p1.y / tri.p1.z, -tri.p2.y / tri.p2.z, -tri.p3.y / tri.p3.z};
@@ -265,9 +265,31 @@ void SoftwareRenderer::render(const Mesh &m)
 {
     shared_ptr<const Image> texture = ((m.image != nullptr) ? m.image->getImage() : whiteTexture);
 
-    for(Triangle tri : m.triangles)
+    vector<thread> threads;
+    size_t threadCount = thread::hardware_concurrency();
+    if(threadCount == 0)
+        threadCount = 1;
+
+    size_t h = image->h;
+
+    threads.resize(threadCount);
+    for(size_t i = 0; i < threadCount; i++)
     {
-        renderTriangle(tri, texture);
+        threads[i] = thread([=]()
+        {
+            size_t startY = i * h / threadCount;
+            size_t endY = (i + 1) * h / threadCount;
+            if(startY == endY)
+                return;
+            for(Triangle tri : m.triangles)
+            {
+                renderTriangle(tri, startY, endY, texture);
+            }
+        });
+    }
+    for(thread &t : threads)
+    {
+        t.join();
     }
 }
 

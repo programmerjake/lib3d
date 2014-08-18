@@ -98,7 +98,7 @@ int main()
     }
     else
     {
-        m2 = makeSphereMesh(100, 50, 16, testTexture);
+        m2 = makeSphereMesh(50, 25, 16, testTexture);
         imageRenderer = makeImageRenderer(2048, 1024);
     }
 

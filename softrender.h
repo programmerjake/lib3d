@@ -3,6 +3,7 @@
 
 #include "renderer.h"
 #include <vector>
+#include <thread>
 
 using namespace std;
 
@@ -50,7 +51,7 @@ private:
     vector<size_t> tBuffer;
     bool writeDepth = true;
     enum {NoTexture = ~(size_t)0};
-    void renderTriangle(Triangle triangleIn, shared_ptr<const Image> texture);
+    void renderTriangle(Triangle triangleIn, size_t sectionTop, size_t sectionBottom, shared_ptr<const Image> texture);
     float aspectRatio;
 public:
     SoftwareRenderer(size_t w, size_t h, float aspectRatio = -1)

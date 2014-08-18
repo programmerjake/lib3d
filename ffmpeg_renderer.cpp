@@ -15,6 +15,7 @@ extern "C"
 #include <iostream>
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
 #include <thread>
 #include <condition_variable>
 #include <mutex>
@@ -55,7 +56,7 @@ float getFFmpegFrameRate()
 {
     if(ffmpegFrameRate > 0)
         return ffmpegFrameRate;
-    const char * retval = getenv("LIB3D_FFMPEG_FPS");
+    const char * retval = getenv("LIB3D_FPS");
     if(retval != nullptr)
     {
         float fps;

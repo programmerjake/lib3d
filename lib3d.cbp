@@ -29,10 +29,9 @@
 			</Target>
 		</Build>
 		<Compiler>
-			<Add option="-march=nocona" />
 			<Add option="-std=c++11" />
 			<Add option="-Wall" />
-			<Add option="-fexceptions -mfpmath=sse -funsafe-math-optimizations `sdl2-config --cflags`" />
+			<Add option="-march=nocona -fexceptions -mfpmath=sse -funsafe-math-optimizations `sdl2-config --cflags`" />
 			<Add option="`pkg-config libavcodec libavformat libavutil libswscale--cflags`" />
 		</Compiler>
 		<Linker>
@@ -54,6 +53,8 @@
 		<Unit filename="main.cpp" />
 		<Unit filename="matrix.h" />
 		<Unit filename="mesh.h" />
+		<Unit filename="rawrenderer.cpp" />
+		<Unit filename="rawrenderer.h" />
 		<Unit filename="render.cpp" />
 		<Unit filename="renderer.h" />
 		<Unit filename="softrender.cpp" />
