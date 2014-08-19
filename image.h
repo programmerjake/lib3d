@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cmath>
 #include <string>
+#include <stdexcept>
 
 using namespace std;
 
@@ -316,6 +317,14 @@ constexpr ColorI setAlphaI(ColorI c, int a)
 {
     return RGBAI(c.r, c.g, c.b, a);
 }
+
+struct ImageLoadError : public runtime_error
+{
+    explicit ImageLoadError(const string &msg)
+        : runtime_error(msg)
+    {
+    }
+};
 
 struct Image
 {

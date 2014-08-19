@@ -33,14 +33,13 @@
 			<Add option="-std=c++11" />
 			<Add option="-Wall" />
 			<Add option="-march=nocona -fexceptions -mfpmath=sse -funsafe-math-optimizations `sdl2-config --cflags`" />
-			<Add option="`pkg-config libavcodec libavformat libavutil libswscale--cflags`" />
+			<Add option="`pkg-config libavcodec libavformat libavutil libswscale MagickWand --cflags`" />
 		</Compiler>
 		<Linker>
-			<Add option="`pkg-config libavcodec libavformat libavutil libswscale --libs`" />
+			<Add option="`pkg-config libavcodec libavformat libavutil libswscale MagickWand --libs`" />
 			<Add option="`sdl2-config --libs`" />
 			<Add library="aa" />
 			<Add library="caca" />
-			<Add library="freeimage" />
 		</Linker>
 		<Unit filename="cacarenderer.cpp" />
 		<Unit filename="cacarenderer.h" />
@@ -49,6 +48,8 @@
 		<Unit filename="generate.h" />
 		<Unit filename="image.cpp" />
 		<Unit filename="image.h" />
+		<Unit filename="image_load_internal.cpp" />
+		<Unit filename="image_load_internal.h" />
 		<Unit filename="libaarenderer.cpp" />
 		<Unit filename="libaarenderer.h" />
 		<Unit filename="main.cpp" />

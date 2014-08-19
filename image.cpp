@@ -1,6 +1,6 @@
 #include "image.h"
-#include <FreeImage.h>
 #include <cstdlib>
+#include "image_load_internal.h"
 
 using namespace std;
 
@@ -281,16 +281,6 @@ StaticImageRef images[] =
     StaticImageRef(&testImage),
     StaticImageRef(&ffmpegOpenGLRendererFont)
 };
-
-void init()
-{
-    static bool didInit = false;
-    if(didInit)
-        return;
-    didInit = true;
-    FreeImage_Initialise();
-    atexit([](){FreeImage_DeInitialise();});
-}
 }
 
 shared_ptr<const Image> Image::loadImage(string fileName)
@@ -305,39 +295,18 @@ shared_ptr<const Image> Image::loadImage(string fileName)
             return retval;
         }
     }
-    init();
-    FIBITMAP *loadedImage = FreeImage_Load(FreeImage_GetFileType(fileName.c_str(), 0), fileName.c_str(), 0);
-    if(!loadedImage || !FreeImage_HasPixels(loadedImage))
-        throw runtime_error("can't load image : " + fileName);
-    FIBITMAP *convertedImage = loadedImage;
-    if(FreeImage_GetImageType(loadedImage) != FIT_BITMAP || FreeImage_GetBPP(loadedImage) != 32)
+    ImageLoadInternal::ImageLoaderResult result = ImageLoadInternal::load(fileName, [](string msg)
     {
-        convertedImage = FreeImage_ConvertTo32Bits(loadedImage);
-        FreeImage_Unload(loadedImage);
-    }
-    if(!convertedImage)
+        throw ImageLoadError(msg);
+    });
+    shared_ptr<Image> retval = make_shared<Image>(result.w, result.h);
+    for(size_t y = 0; y < result.h; y++)
     {
-        throw runtime_error("can't load image : " + fileName);
-    }
-    shared_ptr<Image> pimage;
-    try
-    {
-        pimage = make_shared<Image>(FreeImage_GetWidth(convertedImage), FreeImage_GetHeight(convertedImage));
-        const BYTE *pixels = FreeImage_GetBits(convertedImage);
-        for(size_t y = 0; y < pimage->h; y++)
+        for(size_t x = 0; x < result.w; x++)
         {
-            for(size_t x = 0; x < pimage->w; x++)
-            {
-                const uint8_t *pixel = (const uint8_t *)(pixels + 4 * x + 4 * pimage->w * y);
-                pimage->setPixel(x, pimage->h - y - 1, RGBAI(pixel[FI_RGBA_RED], pixel[FI_RGBA_GREEN], pixel[FI_RGBA_BLUE], pixel[FI_RGBA_ALPHA]));
-            }
+            const uint8_t *pixel = result.getPixelPtr(x, y);
+            retval->setPixel(x, y, RGBAI(pixel[0], pixel[1], pixel[2], pixel[3]));
         }
     }
-    catch(...)
-    {
-        FreeImage_Unload(convertedImage);
-        throw;
-    }
-    FreeImage_Unload(convertedImage);
-    return pimage;
+    return retval;
 }
