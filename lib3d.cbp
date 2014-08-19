@@ -51,8 +51,11 @@
 		<Unit filename="libaarenderer.cpp" />
 		<Unit filename="libaarenderer.h" />
 		<Unit filename="main.cpp" />
+		<Unit filename="material.h" />
 		<Unit filename="matrix.h" />
 		<Unit filename="mesh.h" />
+		<Unit filename="model.cpp" />
+		<Unit filename="model.h" />
 		<Unit filename="rawrenderer.cpp" />
 		<Unit filename="rawrenderer.h" />
 		<Unit filename="render.cpp" />

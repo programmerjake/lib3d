@@ -309,8 +309,12 @@ shared_ptr<const Image> Image::loadImage(string fileName)
     FIBITMAP *loadedImage = FreeImage_Load(FreeImage_GetFileType(fileName.c_str(), 0), fileName.c_str(), 0);
     if(!loadedImage || !FreeImage_HasPixels(loadedImage))
         throw runtime_error("can't load image : " + fileName);
-    FIBITMAP *convertedImage = FreeImage_ConvertTo32Bits(loadedImage);
-    FreeImage_Unload(loadedImage);
+    FIBITMAP *convertedImage = loadedImage;
+    if(FreeImage_GetImageType(loadedImage) != FIT_BITMAP || FreeImage_GetBPP(loadedImage) != 32)
+    {
+        convertedImage = FreeImage_ConvertTo32Bits(loadedImage);
+        FreeImage_Unload(loadedImage);
+    }
     if(!convertedImage)
     {
         throw runtime_error("can't load image : " + fileName);
@@ -319,13 +323,13 @@ shared_ptr<const Image> Image::loadImage(string fileName)
     try
     {
         pimage = make_shared<Image>(FreeImage_GetWidth(convertedImage), FreeImage_GetHeight(convertedImage));
+        const BYTE *pixels = FreeImage_GetBits(convertedImage);
         for(size_t y = 0; y < pimage->h; y++)
         {
             for(size_t x = 0; x < pimage->w; x++)
             {
-                RGBQUAD color;
-                FreeImage_GetPixelColor(convertedImage, x, pimage->h - y - 1, &color);
-                pimage->setPixel(x, y, RGBAI(color.rgbRed, color.rgbGreen, color.rgbBlue, color.rgbReserved));
+                const uint8_t *pixel = (const uint8_t *)(pixels + 4 * x + 4 * pimage->w * y);
+                pimage->setPixel(x, pimage->h - y - 1, RGBAI(pixel[FI_RGBA_RED], pixel[FI_RGBA_GREEN], pixel[FI_RGBA_BLUE], pixel[FI_RGBA_ALPHA]));
             }
         }
     }

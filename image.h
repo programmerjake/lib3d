@@ -33,6 +33,14 @@ private:
     }
 public:
     friend constexpr ColorI RGBAI(int R, int G, int B, int A);
+    friend constexpr bool operator ==(ColorI a, ColorI b)
+    {
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    }
+    friend constexpr bool operator !=(ColorI a, ColorI b)
+    {
+        return a.r != b.r || a.g != b.g || a.b != b.b || a.a != b.a;
+    }
 };
 
 constexpr ColorI RGBAI(int R, int G, int B, int A)
@@ -81,7 +89,7 @@ constexpr int getLuminanceValueI(ColorI c)
 }
 
 template <typename T>
-constexpr const T & limit(const T & v, const T & minimum, const T & maximum)
+constexpr const T &limit(const T &v, const T &minimum, const T &maximum)
 {
     return (v < minimum) ? minimum : ((maximum < v) ? maximum : v);
 }
@@ -108,6 +116,14 @@ public:
         return RGBAI(limit((int)(r * 0x100), 0, 0xFF), limit((int)(g * 0x100), 0, 0xFF), limit((int)(b * 0x100), 0, 0xFF), limit((int)(a * 0x100), 0, 0xFF));
     }
     friend constexpr ColorF RGBAF(float r, float g, float b, float a);
+    friend constexpr bool operator ==(ColorF a, ColorF b)
+    {
+        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
+    }
+    friend constexpr bool operator !=(ColorF a, ColorF b)
+    {
+        return a.r != b.r || a.g != b.g || a.b != b.b || a.a != b.a;
+    }
 };
 
 constexpr ColorF RGBAF(float r, float g, float b, float a)
@@ -118,6 +134,18 @@ constexpr ColorF RGBAF(float r, float g, float b, float a)
 constexpr ColorF RGBF(float r, float g, float b)
 {
     return RGBAF(r, g, b, 1);
+}
+
+constexpr ColorF XYZAF(float x, float y, float z, float a)
+{
+    return RGBAF(0.41847 * x - 0.15866 * y - 0.082835 * z,
+                 -0.091169 * x + 0.25243 * y + 0.015708 * z,
+                 0.0009209 * x - 0.0025498 * y + 0.1786 * z, a);
+}
+
+constexpr ColorF XYZF(float x, float y, float z)
+{
+    return XYZAF(x, y, z, 1);
 }
 
 constexpr ColorF GrayscaleAF(float v, float A)
@@ -161,6 +189,16 @@ constexpr ColorF compose(ColorF fg, ColorF bg)
                  fg.g * fg.a + bg.g * (1 - fg.a),
                  fg.b * fg.a + bg.b * (1 - fg.a),
                  fg.a + bg.a * (1 - fg.a));
+}
+
+constexpr ColorF addHelper(ColorF a, ColorF b, float alphaValue)
+{
+    return RGBAF(a.r * (a.a / alphaValue) + b.r * (b.a / alphaValue), a.g * (a.a / alphaValue) + b.g * (b.a / alphaValue), a.b * (a.a / alphaValue) + b.b * (b.a / alphaValue), alphaValue);
+}
+
+constexpr ColorF add(ColorF a, ColorF b)
+{
+    return (a.a <= 0 && b.a <= 0) ? RGBAF(a.r + b.r, a.g + b.g, a.b + b.b, 0) : addHelper(a, b, 1 - (1 - a.a) * (1 - b.a));
 }
 
 constexpr ColorI compose(ColorI fg, ColorI bg)
@@ -215,45 +253,68 @@ inline ColorF HSBAF(float H, float S, float Br, float A)
     Br = limit<float>(Br, 0, 1);
     float R = 0, G = 0, B = 0;
     H *= 6;
+
     switch((int)std::floor(H))
     {
     case 0:
         R = 1;
         G = H;
         break;
+
     case 1:
         R = 2 - H;
         G = 1;
         break;
+
     case 2:
         G = 1;
         B = H - 2;
         break;
+
     case 3:
         G = 4 - H;
         B = 1;
         break;
+
     case 4:
         B = 1;
         R = H - 4;
         break;
+
     default:
         B = 6 - H;
         R = 1;
         break;
     }
+
     ColorF grayscaleValue = RGBAF(Br, Br, Br, A);
     ColorF colorValue = RGBAF(R, G, B, A);
+
     if(Br < 0.5)
+    {
         colorValue = interpolate(Br * 2, RGBAF(0, 0, 0, A), colorValue);
+    }
     else
+    {
         colorValue = interpolate(2 - Br * 2, RGBAF(1, 1, 1, A), colorValue);
+    }
+
     return interpolate(S, grayscaleValue, colorValue);
 }
 
 inline ColorF HSBF(float H, float S, float B)
 {
     return HSBAF(H, S, B, 1);
+}
+
+constexpr ColorF setAlphaF(ColorF c, float a)
+{
+    return RGBAF(c.r, c.g, c.b, a);
+}
+
+constexpr ColorI setAlphaI(ColorI c, int a)
+{
+    return RGBAI(c.r, c.g, c.b, a);
 }
 
 struct Image
@@ -295,8 +356,11 @@ public:
         if(w > 0 && h > 0)
         {
             pixels = new ColorI[w * h];
+
             for(size_t i = 0; i < w * h; i++)
+            {
                 pixels[i] = rt.pixels[i];
+            }
         }
     }
     Image(Image &&rt)
@@ -314,17 +378,28 @@ public:
     const Image &operator =(const Image &rt)
     {
         if(pixels != nullptr && pixels == rt.pixels)
+        {
             return *this;
+        }
+
         if(pixels != nullptr)
+        {
             delete []pixels;
+        }
+
         w = rt.w;
         h = rt.h;
+
         if(w > 0 && h > 0)
         {
             pixels = new ColorI[w * h];
+
             for(size_t i = 0; i < w * h; i++)
+            {
                 pixels[i] = rt.pixels[i];
+            }
         }
+
         return *this;
     }
     const Image &operator =(Image && rt)
@@ -361,11 +436,11 @@ public:
 
         return pixels[x + y * w];
     }
-    ColorI * getLineAddress(size_t y)
+    ColorI *getLineAddress(size_t y)
     {
         return &pixels[y * w];
     }
-    const ColorI * getLineAddress(size_t y) const
+    const ColorI *getLineAddress(size_t y) const
     {
         return &pixels[y * w];
     }
@@ -378,34 +453,34 @@ public:
     }
     struct HLineRange
     {
-        ColorI * beginV;
-        ColorI * endV;
-        HLineRange(ColorI * beginV, ColorI * endV)
+        ColorI *beginV;
+        ColorI *endV;
+        HLineRange(ColorI *beginV, ColorI *endV)
             : beginV(beginV), endV(endV)
         {
         }
-        ColorI * begin()
+        ColorI *begin()
         {
             return beginV;
         }
-        ColorI * end()
+        ColorI *end()
         {
             return endV;
         }
     };
     struct HLineRangeConst
     {
-        const ColorI * beginV;
-        const ColorI * endV;
-        HLineRangeConst(ColorI * beginV, ColorI * endV)
+        const ColorI *beginV;
+        const ColorI *endV;
+        HLineRangeConst(ColorI *beginV, ColorI *endV)
             : beginV(beginV), endV(endV)
         {
         }
-        const ColorI * begin()
+        const ColorI *begin()
         {
             return beginV;
         }
-        const ColorI * end()
+        const ColorI *end()
         {
             return endV;
         }
@@ -435,59 +510,59 @@ public:
     struct ColumnIterator : public std::iterator<std::random_access_iterator_tag, ColorI>
     {
         friend struct ColumnConstIterator;
-        ColorI * value;
+        ColorI *value;
         size_t w;
     public:
         ColumnIterator()
             : value(nullptr), w(0)
         {
         }
-        ColumnIterator(ColorI * value, size_t w)
+        ColumnIterator(ColorI *value, size_t w)
             : value(value), w(w)
         {
         }
-        bool operator ==(const ColumnIterator & rt) const
+        bool operator ==(const ColumnIterator &rt) const
         {
             return value == rt.value;
         }
-        bool operator !=(const ColumnIterator & rt) const
+        bool operator !=(const ColumnIterator &rt) const
         {
             return value != rt.value;
         }
-        bool operator >=(const ColumnIterator & rt) const
+        bool operator >=(const ColumnIterator &rt) const
         {
             return value >= rt.value;
         }
-        bool operator <=(const ColumnIterator & rt) const
+        bool operator <=(const ColumnIterator &rt) const
         {
             return value <= rt.value;
         }
-        bool operator >(const ColumnIterator & rt) const
+        bool operator >(const ColumnIterator &rt) const
         {
             return value > rt.value;
         }
-        bool operator <(const ColumnIterator & rt) const
+        bool operator <(const ColumnIterator &rt) const
         {
             return value < rt.value;
         }
-        ColorI & operator *() const
+        ColorI &operator *() const
         {
             return *value;
         }
-        ColorI & operator [](ptrdiff_t index) const
+        ColorI &operator [](ptrdiff_t index) const
         {
             return value[(ptrdiff_t)w * index];
         }
-        ColorI * operator ->() const
+        ColorI *operator ->() const
         {
             return value;
         }
-        const ColumnIterator & operator ++()
+        const ColumnIterator &operator ++()
         {
             value += w;
             return *this;
         }
-        const ColumnIterator & operator --()
+        const ColumnIterator &operator --()
         {
             value -= w;
             return *this;
@@ -516,16 +591,16 @@ public:
         {
             return ColumnIterator(b.value + b.w * a, b.w);
         }
-        ptrdiff_t operator -(const ColumnIterator & rt) const
+        ptrdiff_t operator -(const ColumnIterator &rt) const
         {
             return (value - rt.value) / w;
         }
-        const ColumnIterator & operator +=(ptrdiff_t rt)
+        const ColumnIterator &operator +=(ptrdiff_t rt)
         {
             value += w * rt;
             return *this;
         }
-        const ColumnIterator & operator -=(ptrdiff_t rt)
+        const ColumnIterator &operator -=(ptrdiff_t rt)
         {
             value -= w * rt;
             return *this;
@@ -533,63 +608,63 @@ public:
     };
     struct ColumnConstIterator : public std::iterator<std::random_access_iterator_tag, const ColorI>
     {
-        const ColorI * value;
+        const ColorI *value;
         size_t w;
     public:
         ColumnConstIterator()
             : value(nullptr), w(0)
         {
         }
-        ColumnConstIterator(const ColorI * value, size_t w)
+        ColumnConstIterator(const ColorI *value, size_t w)
             : value(value), w(w)
         {
         }
-        ColumnConstIterator(const ColumnIterator & rt)
+        ColumnConstIterator(const ColumnIterator &rt)
             : value(rt.value), w(rt.w)
         {
         }
-        bool operator ==(const ColumnConstIterator & rt) const
+        bool operator ==(const ColumnConstIterator &rt) const
         {
             return value == rt.value;
         }
-        bool operator !=(const ColumnConstIterator & rt) const
+        bool operator !=(const ColumnConstIterator &rt) const
         {
             return value != rt.value;
         }
-        bool operator >=(const ColumnConstIterator & rt) const
+        bool operator >=(const ColumnConstIterator &rt) const
         {
             return value >= rt.value;
         }
-        bool operator <=(const ColumnConstIterator & rt) const
+        bool operator <=(const ColumnConstIterator &rt) const
         {
             return value <= rt.value;
         }
-        bool operator >(const ColumnConstIterator & rt) const
+        bool operator >(const ColumnConstIterator &rt) const
         {
             return value > rt.value;
         }
-        bool operator <(const ColumnConstIterator & rt) const
+        bool operator <(const ColumnConstIterator &rt) const
         {
             return value < rt.value;
         }
-        const ColorI & operator *() const
+        const ColorI &operator *() const
         {
             return *value;
         }
-        const ColorI & operator [](ptrdiff_t index) const
+        const ColorI &operator [](ptrdiff_t index) const
         {
             return value[(ptrdiff_t)w * index];
         }
-        const ColorI * operator ->() const
+        const ColorI *operator ->() const
         {
             return value;
         }
-        const ColumnConstIterator & operator ++()
+        const ColumnConstIterator &operator ++()
         {
             value += w;
             return *this;
         }
-        const ColumnConstIterator & operator --()
+        const ColumnConstIterator &operator --()
         {
             value -= w;
             return *this;
@@ -618,16 +693,16 @@ public:
         {
             return ColumnConstIterator(b.value + b.w * a, b.w);
         }
-        ptrdiff_t operator -(const ColumnConstIterator & rt) const
+        ptrdiff_t operator -(const ColumnConstIterator &rt) const
         {
             return (value - rt.value) / w;
         }
-        const ColumnConstIterator & operator +=(ptrdiff_t rt)
+        const ColumnConstIterator &operator +=(ptrdiff_t rt)
         {
             value += w * rt;
             return *this;
         }
-        const ColumnConstIterator & operator -=(ptrdiff_t rt)
+        const ColumnConstIterator &operator -=(ptrdiff_t rt)
         {
             value -= w * rt;
             return *this;
@@ -635,10 +710,10 @@ public:
     };
     struct VLineRange
     {
-        ColorI * beginPtr;
-        ColorI * endPtr;
+        ColorI *beginPtr;
+        ColorI *endPtr;
         size_t w;
-        VLineRange(ColorI * beginPtr, ColorI * endPtr, size_t w)
+        VLineRange(ColorI *beginPtr, ColorI *endPtr, size_t w)
             : beginPtr(beginPtr), endPtr(endPtr), w(w)
         {
         }
@@ -653,10 +728,10 @@ public:
     };
     struct VLineRangeConst
     {
-        const ColorI * beginPtr;
-        const ColorI * endPtr;
+        const ColorI *beginPtr;
+        const ColorI *endPtr;
         size_t w;
-        VLineRangeConst(const ColorI * beginPtr, const ColorI * endPtr, size_t w)
+        VLineRangeConst(const ColorI *beginPtr, const ColorI *endPtr, size_t w)
             : beginPtr(beginPtr), endPtr(endPtr), w(w)
         {
         }
@@ -696,8 +771,8 @@ public:
 
 struct Texture
 {
-    Texture(const Texture & rt) = delete;
-    const Texture & operator =(const Texture & rt) = delete;
+    Texture(const Texture &rt) = delete;
+    const Texture &operator =(const Texture &rt) = delete;
     Texture()
     {
     }

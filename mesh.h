@@ -163,6 +163,43 @@ struct Mesh
     {
         append(*mesh.mesh, mesh.color, mesh.tform);
     }
+    pair<VectorF, VectorF> getExtents() const
+    {
+        VectorF minP = VectorF(0), maxP = VectorF(0);
+        bool isFirst = true;
+        for(Triangle tri : triangles)
+        {
+            if(isFirst)
+            {
+                minP = tri.p1;
+                maxP = tri.p1;
+                isFirst = false;
+            }
+            else
+            {
+                minP.x = min(minP.x, tri.p1.x);
+                minP.y = min(minP.y, tri.p1.y);
+                minP.z = min(minP.z, tri.p1.z);
+                maxP.x = max(maxP.x, tri.p1.x);
+                maxP.y = max(maxP.y, tri.p1.y);
+                maxP.z = max(maxP.z, tri.p1.z);
+            }
+            minP.x = min(minP.x, tri.p2.x);
+            minP.y = min(minP.y, tri.p2.y);
+            minP.z = min(minP.z, tri.p2.z);
+            maxP.x = max(maxP.x, tri.p2.x);
+            maxP.y = max(maxP.y, tri.p2.y);
+            maxP.z = max(maxP.z, tri.p2.z);
+
+            minP.x = min(minP.x, tri.p3.x);
+            minP.y = min(minP.y, tri.p3.y);
+            minP.z = min(minP.z, tri.p3.z);
+            maxP.x = max(maxP.x, tri.p3.x);
+            maxP.y = max(maxP.y, tri.p3.y);
+            maxP.z = max(maxP.z, tri.p3.z);
+        }
+        return make_pair(minP, maxP);
+    }
 };
 
 inline TransformedMesh::operator Mesh() const

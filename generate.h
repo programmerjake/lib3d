@@ -21,6 +21,8 @@
 #include "mesh.h"
 #include <utility>
 #include <functional>
+#include <tuple>
+#include <vector>
 
 using namespace std;
 
@@ -65,6 +67,40 @@ namespace Generate
 		const TextureCoord t3 = TextureCoord(texture.maxU, texture.maxV);
 		const TextureCoord t4 = TextureCoord(texture.minU, texture.maxV);
 		return Mesh(vector<Triangle>{Triangle(p1, c1, t1, p2, c2, t2, p3, c3, t3), Triangle(p3, c3, t3, p4, c4, t4, p1, c1, t1)}, texture.image);
+	}
+
+	inline Mesh convexPolygon(shared_ptr<Texture> texture, vector<tuple<VectorF, ColorF, TextureCoord, VectorF>> vertices)
+	{
+	    if(vertices.size() < 3)
+            return Mesh();
+        vector<Triangle> triangles;
+        triangles.reserve(vertices.size() - 2);
+        tuple<VectorF, ColorF, TextureCoord, VectorF> v1 = vertices[0];
+        for(size_t i = 1, j = 2; j < vertices.size(); i++, j++)
+        {
+            tuple<VectorF, ColorF, TextureCoord, VectorF> v2 = vertices[i], v3 = vertices[j];
+            triangles.push_back(Triangle(get<0>(v1), get<1>(v1), get<2>(v1), get<3>(v1),
+                                          get<0>(v2), get<1>(v2), get<2>(v2), get<3>(v2),
+                                          get<0>(v3), get<1>(v3), get<2>(v3), get<3>(v3)));
+        }
+        return Mesh(std::move(triangles), texture);
+	}
+
+	inline Mesh convexPolygon(shared_ptr<Texture> texture, vector<tuple<VectorF, ColorF, TextureCoord>> vertices)
+	{
+	    if(vertices.size() < 3)
+            return Mesh();
+        vector<Triangle> triangles;
+        triangles.reserve(vertices.size() - 2);
+        tuple<VectorF, ColorF, TextureCoord> v1 = vertices[0];
+        for(size_t i = 1, j = 2; j < vertices.size(); i++, j++)
+        {
+            tuple<VectorF, ColorF, TextureCoord> v2 = vertices[i], v3 = vertices[j];
+            triangles.push_back(Triangle(get<0>(v1), get<1>(v1), get<2>(v1),
+                                          get<0>(v2), get<1>(v2), get<2>(v2),
+                                          get<0>(v3), get<1>(v3), get<2>(v3)));
+        }
+        return Mesh(std::move(triangles), texture);
 	}
 
 	/// make a box from <0, 0, 0> to <1, 1, 1>

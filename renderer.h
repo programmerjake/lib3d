@@ -25,6 +25,18 @@ struct Renderer
         assert(m != nullptr);
         render(*m);
     }
+    void render(TransformedMesh m)
+    {
+        render((Mesh)m);
+    }
+    void render(ColorizedTransformedMesh m)
+    {
+        render((Mesh)m);
+    }
+    void render(ColorizedMesh m)
+    {
+        render((Mesh)m);
+    }
     virtual void calcScales() = 0;
 protected:
     virtual void clearInternal(ColorF bg) = 0;

@@ -2,6 +2,8 @@
 #include "generate.h"
 #include <cmath>
 #include <random>
+#include <iostream>
+#include "model.h"
 
 using namespace std;
 
@@ -80,8 +82,23 @@ inline ColorF shadeFn(ColorF vColor, VectorF vNormal, VectorF vPosition)
     return scaleF(min<float>(1, v), vColor);
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    shared_ptr<Model> model;
+    string fileName = argc > 1 ? argv[1] : "";
+    if(fileName != "")
+    {
+        try
+        {
+            shared_ptr<ModelLoader> loader = ModelLoader::loadOBJ(fileName, [](string msg){cout << "model load : warning : " << msg << endl;});
+            model = loader->loadAll();
+        }
+        catch(exception &e)
+        {
+            cerr << "Error : " << e.what() << endl;
+            return 1;
+        }
+    }
     shared_ptr<WindowRenderer> renderer = getWindowRenderer();
     minstd_rand0 randomGenerator;
     shared_ptr<Mesh> m = makeRandomMesh(randomGenerator, 20);
@@ -90,7 +107,7 @@ int main()
     shared_ptr<ImageRenderer> imageRenderer;
     shared_ptr<Texture> testTexture = renderer->preloadTexture(make_shared<ImageTexture>(Image::loadImage("test2.png")));
 
-    if(false)
+    if(true)
     {
         TextureDescriptor td(testTexture);
         m2 = (shared_ptr<Mesh>)transform(Matrix::translate(VectorF(-0.5)).concat(Matrix::scale(2 * 10)), Generate::unitBox(td, td, td, td, td, td));
@@ -100,6 +117,14 @@ int main()
     {
         m2 = makeSphereMesh(50, 25, 16, testTexture);
         imageRenderer = makeImageRenderer(2048, 1024);
+    }
+    pair<VectorF, VectorF> modelExtents;
+    float modelContainingSphereRadius = 0;
+    if(model)
+    {
+        model->preloadTextures(renderer);
+        modelExtents = model->getExtents();
+        modelContainingSphereRadius = max(abs(get<0>(modelExtents)), abs(get<1>(modelExtents)));
     }
 
     double startTime = timer();
@@ -116,18 +141,19 @@ int main()
         tform = (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::translate(0, 0, -30));
         m2->image = image;
         renderer->render(shadeMesh(transform(tform, m2), shadeFn));
-#elif 1
-        tform = (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::translate(0, 0, -30));
-        Mesh containerMesh = shadeMesh(colorize(RGBAF(1, 1, 1, 0.5), transform(tform, m2)), shadeFn);
-        renderer->render(reverse(containerMesh));
-        renderer->render(shadeMesh(transform(tform, m), shadeFn));
-        renderer->render(containerMesh);
 #else
-        tform = (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::translate(0, 0, -30));
-        Mesh containerMesh = shadeMesh(colorize(RGBAF(1, 1, 1, 0.5), transform(tform, m2)), shadeFn);
-        renderer->render(reverse(containerMesh));
-        renderer->render(shadeMesh(transform(tform, m), shadeFn));
-        renderer->render(containerMesh);
+        if(model)
+        {
+            model->render(renderer, Matrix::translate(0, 0, -2 * modelContainingSphereRadius), (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)), Light(VectorF(1, 1, 1)));
+        }
+        else
+        {
+            tform = (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::translate(0, 0, -30));
+            Mesh containerMesh = shadeMesh(colorize(RGBAF(1, 1, 1, 0.5), transform(tform, m2)), shadeFn);
+            renderer->render(reverse(containerMesh));
+            renderer->render(shadeMesh(transform(tform, m), shadeFn));
+            renderer->render(containerMesh);
+        }
 #endif
         renderer->flip();
     }
