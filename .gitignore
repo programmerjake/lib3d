@@ -9,3 +9,4 @@ core
 *.mp4
 *.mpg
 lib3d-output.*
+test_objects
