@@ -125,6 +125,10 @@ int main(int argc, char **argv)
         model->preloadTextures(renderer);
         modelExtents = model->getExtents();
         modelContainingSphereRadius = max(abs(get<0>(modelExtents)), abs(get<1>(modelExtents)));
+        for(auto &m : model->meshes)
+        {
+            get<1>(m).append(reverse(get<1>(m)));
+        }
     }
 
     double startTime = timer();
@@ -145,7 +149,7 @@ int main(int argc, char **argv)
         if(model)
         {
             float scaleFactor = 1 / max(0.001f, modelContainingSphereRadius);
-            model->render(renderer, Matrix::translate(0, 0, -2 * scaleFactor * modelContainingSphereRadius), (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::scale(scaleFactor)), Light(VectorF(1, 1, 1)));
+            model->render(renderer, Matrix::translate(0, 0, -1.2 * scaleFactor * modelContainingSphereRadius), (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::scale(scaleFactor)), Light(VectorF(1, 1, 1)));
         }
         else
         {
