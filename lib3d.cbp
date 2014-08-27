@@ -11,10 +11,19 @@
 				<Option object_output="obj/Debug/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
-				<Option parameters="test_objects/knoxS.obj" />
+				<Option host_application="gksudo" />
+				<Option run_host_application_in_terminal="0" />
 				<Compiler>
 					<Add option="-g" />
+					<Add option="`sdl2-config --cflags` `pkg-config libavcodec libavformat libavutil libswscale MagickWand --cflags`" />
 				</Compiler>
+				<Linker>
+					<Add option="`pkg-config libavcodec libavformat libavutil libswscale MagickWand --libs` `sdl2-config --libs`" />
+					<Add library="aa" />
+					<Add library="caca" />
+					<Add library="vga" />
+					<Add library="vgagl" />
+				</Linker>
 			</Target>
 			<Target title="Release">
 				<Option output="bin/Release/lib3d" prefix_auto="1" extension_auto="1" />
@@ -23,47 +32,141 @@
 				<Option compiler="gcc" />
 				<Compiler>
 					<Add option="-O3" />
+					<Add option="`sdl2-config --cflags` `pkg-config libavcodec libavformat libavutil libswscale MagickWand --cflags`" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
+					<Add option="`pkg-config libavcodec libavformat libavutil libswscale MagickWand --libs` `sdl2-config --libs`" />
+					<Add library="aa" />
+					<Add library="caca" />
+					<Add library="vga" />
+					<Add library="vgagl" />
+				</Linker>
+			</Target>
+			<Target title="Release Library">
+				<Option output="3d" imp_lib="lib3d.a" def_file="lib3d.def" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release-Library" />
+				<Option type="3" />
+				<Option compiler="gcc" />
+				<Option createDefFile="1" />
+				<Option createStaticLib="1" />
+				<Compiler>
+					<Add option="-O3" />
+					<Add option="`sdl2-config --cflags` `pkg-config libavcodec libavformat libavutil libswscale MagickWand --cflags`" />
+				</Compiler>
+				<Linker>
+					<Add option="`pkg-config libavcodec libavformat libavutil libswscale MagickWand --libs` `sdl2-config --libs`" />
+					<Add library="aa" />
+					<Add library="caca" />
+					<Add library="vga" />
+					<Add library="vgagl" />
+				</Linker>
+			</Target>
+			<Target title="Library Test">
+				<Option output="bin/Library-Test/lib3d" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Library-Test/" />
+				<Option external_deps="lib3d.so;" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O3" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+					<Add library="./lib3d.so" />
 				</Linker>
 			</Target>
 		</Build>
 		<Compiler>
 			<Add option="-std=c++11" />
 			<Add option="-Wall" />
-			<Add option="-march=nocona -fexceptions -mfpmath=sse -funsafe-math-optimizations `sdl2-config --cflags`" />
-			<Add option="`pkg-config libavcodec libavformat libavutil libswscale MagickWand --cflags`" />
+			<Add option="-march=nocona -fexceptions -mfpmath=sse -funsafe-math-optimizations" />
 		</Compiler>
-		<Linker>
-			<Add option="`pkg-config libavcodec libavformat libavutil libswscale MagickWand --libs`" />
-			<Add option="`sdl2-config --libs`" />
-			<Add library="aa" />
-			<Add library="caca" />
-		</Linker>
-		<Unit filename="cacarenderer.cpp" />
-		<Unit filename="cacarenderer.h" />
-		<Unit filename="ffmpeg_renderer.cpp" />
+		<Unit filename="cacarenderer.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
+		<Unit filename="cacarenderer.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
+		<Unit filename="ffmpeg_renderer.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
 		<Unit filename="ffmpeg_renderer.h" />
 		<Unit filename="generate.h" />
-		<Unit filename="image.cpp" />
+		<Unit filename="image.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
 		<Unit filename="image.h" />
-		<Unit filename="image_load_internal.cpp" />
-		<Unit filename="image_load_internal.h" />
-		<Unit filename="libaarenderer.cpp" />
-		<Unit filename="libaarenderer.h" />
-		<Unit filename="main.cpp" />
+		<Unit filename="image_load_internal.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
+		<Unit filename="image_load_internal.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
+		<Unit filename="libaarenderer.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
+		<Unit filename="libaarenderer.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
+		<Unit filename="main.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Library Test" />
+		</Unit>
 		<Unit filename="material.h" />
 		<Unit filename="matrix.h" />
 		<Unit filename="mesh.h" />
-		<Unit filename="model.cpp" />
+		<Unit filename="model.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
 		<Unit filename="model.h" />
-		<Unit filename="rawrenderer.cpp" />
+		<Unit filename="rawrenderer.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
 		<Unit filename="rawrenderer.h" />
-		<Unit filename="render.cpp" />
+		<Unit filename="render.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
 		<Unit filename="renderer.h" />
-		<Unit filename="softrender.cpp" />
+		<Unit filename="softrender.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
 		<Unit filename="softrender.h" />
+		<Unit filename="svgarenderer.cpp">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
+		<Unit filename="svgarenderer.h">
+			<Option target="Debug" />
+			<Option target="Release" />
+			<Option target="Release Library" />
+		</Unit>
 		<Unit filename="triangle.h" />
 		<Unit filename="vector.h" />
 		<Extensions>

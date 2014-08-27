@@ -10,3 +10,5 @@ core
 *.mpg
 lib3d-output.*
 test_objects
+*.a
+*.so

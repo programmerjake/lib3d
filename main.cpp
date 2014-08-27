@@ -148,7 +148,7 @@ int main(int argc, char **argv)
 #else
         if(model)
         {
-            float scaleFactor = 1 / max(0.001f, modelContainingSphereRadius);
+            float scaleFactor = 30 / max(0.001f, modelContainingSphereRadius);
             model->render(renderer, Matrix::translate(0, 0, -1.2 * scaleFactor * modelContainingSphereRadius), (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::scale(scaleFactor)), Light(VectorF(1, 1, 1)));
         }
         else

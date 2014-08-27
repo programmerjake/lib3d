@@ -4,6 +4,7 @@
 #include "cacarenderer.h"
 #include "ffmpeg_renderer.h"
 #include "rawrenderer.h"
+#include "svgarenderer.h"
 #include <SDL.h>
 #include <stdexcept>
 #include <cstdlib>
@@ -1161,6 +1162,7 @@ const Driver drivers[] =
     Driver("sdl", []()->shared_ptr<WindowRenderer>{return make_shared<SDLWindowRenderer>();}, makeSoftwareImageRenderer),
     Driver("caca", makeCacaRenderer, makeSoftwareImageRenderer),
     Driver("aalib", makeLibAARenderer, makeSoftwareImageRenderer),
+    Driver("svga", makeSVGARenderer, makeSoftwareImageRenderer),
     Driver("null", []()->shared_ptr<WindowRenderer>{return make_shared<NullWindowRenderer>();}, makeSoftwareImageRenderer),
     Driver("ffmpeg", makeFFmpegOpenGLRenderer, makeOpenGLImageRenderer),
     Driver("ffmpeg-no-opengl", makeFFmpegNoOpenGLRenderer, makeSoftwareImageRenderer),
