@@ -19,10 +19,14 @@
 #define GENERATE_H_INCLUDED
 
 #include "mesh.h"
+#include "image.h"
 #include <utility>
 #include <functional>
 #include <tuple>
 #include <vector>
+#include <cwchar>
+#include <string>
+#include <cmath>
 
 using namespace std;
 
@@ -172,6 +176,121 @@ namespace Generate
 		}
 		return std::move(retval);
 	}
+
+    struct TextProperties final
+    {
+        float tabWidth = 8;
+    };
+
+	class Text final
+	{
+	    Text() = delete;
+	    Text(const Text &) = delete;
+	    void operator =(const Text &) = delete;
+        static void renderChar(Mesh &dest, float x, float y, unsigned ch, ColorF c, const std::shared_ptr<Texture> &fontTexture)
+        {
+            TextureDescriptor td = getTextFontCharacterTextureDescriptor(ch, fontTexture);
+            dest.append(quadrilateral(td,
+                                      VectorF(0 + x, 0 + y, 0), c,
+                                      VectorF(1 + x, 0 + y, 0), c,
+                                      VectorF(1 + x, 1 + y, 0), c,
+                                      VectorF(0 + x, 1 + y, 0), c
+                                      ));
+        }
+        static void renderEngine(Mesh *dest, float &x, float &y, float &w, float &h, std::wstring str, ColorF c, const TextProperties &tp, const std::shared_ptr<Texture> &fontTexture = nullptr)
+        {
+            float wholeHeight = 0;
+            if(dest)
+                renderEngine(nullptr, x, y, w, wholeHeight, str, c, tp);
+            x = 0;
+            y = 0;
+            w = 0;
+            h = 0;
+            for(auto ch : str)
+            {
+                switch(ch)
+                {
+                case '\r':
+                    x = 0;
+                    break;
+                case '\n':
+                    x = 0;
+                    y += 1;
+                    break;
+                case '\t':
+                {
+                    float tabWidth = tp.tabWidth;
+                    if(!std::isfinite(tabWidth) || tabWidth < 1e-4)
+                        tabWidth = 1;
+                    if(tabWidth > 1e6)
+                        tabWidth = 1e6;
+                    x /= tabWidth;
+                    x += 1e-4;
+                    x = std::floor(x);
+                    x += 1;
+                    x *= tabWidth;
+                    break;
+                }
+                case '\b':
+                    x -= 1;
+                    if(x < 0)
+                        x = 0;
+                    break;
+                case '\0':
+                case ' ':
+                    x += 1;
+                    break;
+                default:
+                    if(dest)
+                        renderChar(*dest, x, wholeHeight - y - 1, ch, c, fontTexture);
+                    x += 1;
+                    break;
+                }
+                if(y >= h)
+                    h = y + 1;
+                if(x > w)
+                    w = x;
+            }
+            y = h - y - 1;
+        }
+	public:
+        static float width(std::wstring str, const TextProperties &tp = TextProperties())
+        {
+            float x, y, w, h;
+            renderEngine(nullptr, x, y, w, h, str, ColorF(), tp);
+            return w;
+        }
+        static float height(std::wstring str, const TextProperties &tp = TextProperties())
+        {
+            float x, y, w, h;
+            renderEngine(nullptr, x, y, w, h, str, ColorF(), tp);
+            return h;
+        }
+        static float x(std::wstring str, const TextProperties &tp = TextProperties())
+        {
+            float x, y, w, h;
+            renderEngine(nullptr, x, y, w, h, str, ColorF(), tp);
+            return x;
+        }
+        static float y(std::wstring str, const TextProperties &tp = TextProperties())
+        {
+            float x, y, w, h;
+            renderEngine(nullptr, x, y, w, h, str, ColorF(), tp);
+            return y;
+        }
+        static Mesh &mesh(Mesh &dest, std::wstring str, std::shared_ptr<Texture> fontTexture = nullptr, ColorF c = GrayscaleF(1), const TextProperties &tp = TextProperties())
+        {
+            float x, y, w, h;
+            renderEngine(&dest, x, y, w, h, str, c, tp, fontTexture);
+            return dest;
+        }
+        static Mesh mesh(std::wstring str, std::shared_ptr<Texture> fontTexture = nullptr, ColorF c = GrayscaleF(1), const TextProperties &tp = TextProperties())
+        {
+            Mesh dest;
+            mesh(dest, str, fontTexture, c, tp);
+            return std::move(dest);
+        }
+	};
 }
 
 #endif // GENERATE_H_INCLUDED

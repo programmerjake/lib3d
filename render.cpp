@@ -1074,7 +1074,7 @@ class FFmpegOpenGLRenderer : public WindowRenderer
     shared_ptr<Texture> fontTexture;
     void renderCharacter(Mesh &dest, int x, int y, char ch)
     {
-        TextureDescriptor td = getFFmpegOpenGLRendererFontCharacterTextureDescriptor(ch, fontTexture);
+        TextureDescriptor td = getTextFontCharacterTextureDescriptor(ch, fontTexture);
         if(!td)
             return;
         ColorF c = RGBF(0, 0, 0);
@@ -1098,7 +1098,7 @@ public:
         : openGLRenderer(make_shared<OpenGLWindowRenderer>(128, 96))
     {
         ffmpegRenderer = makeFFmpegRenderer(makeOpenGLImageRenderer);
-        fontTexture = openGLRenderer->preloadTexture(make_shared<ImageTexture>(Image::loadImage("ffmpeg-opengl-renderer-font.png")));
+        fontTexture = openGLRenderer->preloadTexture(loadTextFontTexture());
     }
 protected:
     virtual void clearInternal(ColorF bg) override

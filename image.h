@@ -828,6 +828,7 @@ struct TextureDescriptor
     }
 };
 
-TextureDescriptor getFFmpegOpenGLRendererFontCharacterTextureDescriptor(char ch, shared_ptr<Texture> texture);
+shared_ptr<Texture> loadTextFontTexture();
+TextureDescriptor getTextFontCharacterTextureDescriptor(unsigned ch, shared_ptr<Texture> texture);
 
 #endif // IMAGE_H_INCLUDED

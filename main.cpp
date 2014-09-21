@@ -3,6 +3,9 @@
 #include <cmath>
 #include <random>
 #include <iostream>
+#include <sstream>
+#include <string>
+#include <cwchar>
 #include "model.h"
 
 using namespace std;
@@ -131,11 +134,18 @@ int main(int argc, char **argv)
         }
     }
 
+    shared_ptr<Texture> fontTexture = renderer->preloadTexture(loadTextFontTexture());
+
     double startTime = timer();
+    double lastTime = -1;
+    float fps = 30;
 
     while(true)
     {
         double time = timer();
+        if(lastTime != -1)
+            fps = 1 / max<float>(1e-9f, time - lastTime);
+        lastTime = time;
         Matrix tform = (Matrix::rotateY((time - startTime) / 2 * M_PI)).concat(Matrix::translate(0, 0, -30));
         renderer->clear();
 #if 0
@@ -160,6 +170,12 @@ int main(int argc, char **argv)
             renderer->render(containerMesh);
         }
 #endif
+        wostringstream ss;
+        ss << L"FPS: " << fps;
+        //float textWidth = Generate::Text::width(ss.str());
+        float textHeight = Generate::Text::height(ss.str());
+        float textScale = 1 / 10.0f;
+        renderer->render(transform(Matrix::scale(textScale).concat(Matrix::translate(-renderer->scaleX(), renderer->scaleY() - textHeight * textScale, -1)), Generate::Text::mesh(ss.str(), fontTexture, RGBF(1, 0.5, 1))));
         renderer->flip();
     }
 }
