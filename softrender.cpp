@@ -66,7 +66,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
     size_t textureW = texture->w;
     size_t textureH = texture->h;
 
-    size_t startY = sectionTop, endY = sectionBottom - 1;
+    int_fast32_t startY = sectionTop, endY = (int_fast32_t)sectionBottom - 1;
     if(tri.p1.z < -eps && tri.p2.z < -eps && tri.p3.z < -eps)
     {
         float y[3] = {-tri.p1.y / tri.p1.z, -tri.p2.y / tri.p2.z, -tri.p3.y / tri.p3.z};
@@ -107,15 +107,15 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
             return;
         if(startY < minY)
         {
-            startY = (size_t)std::ceil(minY);
+            startY = (int_fast32_t)std::ceil(minY);
         }
         if(endY > maxY)
         {
-            endY = (size_t)std::floor(maxY);
+            endY = (int_fast32_t)std::floor(maxY);
         }
     }
 
-    for(size_t y = startY; y <= endY; y++)
+    for(int_fast32_t y = startY; y <= endY; y++)
     {
         ColorI * imageLine = image->getLineAddress(y);
         VectorF startPixelCoords = VectorF(0, y, -1);
@@ -129,7 +129,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
         float startEdge3V = dot(edge3.normal, startPixelCoords) + edge3.d * startInvZ;
         float stepEdge3V = dot(edge3.normal, stepPixelCoords) + edge3.d * stepInvZ;
 
-        size_t startX = 0, endX = w - 1;
+        int_fast32_t startX = 0, endX = (int_fast32_t)w - 1;
 
         if(stepEdge1V > 0) // startEdge
         {
@@ -137,7 +137,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
                 continue;
             if(startX * stepEdge1V < -startEdge1V)
             {
-                startX = (size_t)std::ceil(-startEdge1V / stepEdge1V);
+                startX = (int_fast32_t)std::ceil(-startEdge1V / stepEdge1V);
             }
         }
         else if(stepEdge1V == 0)
@@ -151,7 +151,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
                 continue;
             if(endX * stepEdge1V < -startEdge1V)
             {
-                endX = (size_t)std::ceil(-startEdge1V / stepEdge1V) - 1;
+                endX = (int_fast32_t)std::ceil(-startEdge1V / stepEdge1V) - 1;
             }
         }
         if(stepEdge2V > 0) // startEdge
@@ -160,7 +160,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
                 continue;
             if(startX * stepEdge2V < -startEdge2V)
             {
-                startX = (size_t)std::ceil(-startEdge2V / stepEdge2V);
+                startX = (int_fast32_t)std::ceil(-startEdge2V / stepEdge2V);
             }
         }
         else if(stepEdge2V == 0)
@@ -174,7 +174,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
                 continue;
             if(endX * stepEdge2V < -startEdge2V)
             {
-                endX = (size_t)std::ceil(-startEdge2V / stepEdge2V) - 1;
+                endX = (int_fast32_t)std::ceil(-startEdge2V / stepEdge2V) - 1;
             }
         }
         if(stepEdge3V > 0) // startEdge
@@ -183,7 +183,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
                 continue;
             if(startX * stepEdge3V < -startEdge3V)
             {
-                startX = (size_t)std::ceil(-startEdge3V / stepEdge3V);
+                startX = (int_fast32_t)std::ceil(-startEdge3V / stepEdge3V);
             }
         }
         else if(stepEdge3V == 0)
@@ -197,7 +197,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
                 continue;
             if(endX * stepEdge3V < -startEdge3V)
             {
-                endX = (size_t)std::ceil(-startEdge3V / stepEdge3V) - 1;
+                endX = (int_fast32_t)std::ceil(-startEdge3V / stepEdge3V) - 1;
             }
         }
 
@@ -209,7 +209,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
 
         VectorF pixelCoords = startPixelCoords;
         float invZ = startInvZ;
-        for(size_t x = startX; x <= endX; x++, pixelCoords += stepPixelCoords, invZ += stepInvZ)
+        for(int_fast32_t x = startX; x <= endX; x++, pixelCoords += stepPixelCoords, invZ += stepInvZ)
         {
             if(invZ < zBuffer[x + y * w])
                 continue;
