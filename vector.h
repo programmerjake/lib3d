@@ -102,9 +102,9 @@ struct VectorF
         return VectorF(x / rt, y / rt, z / rt);
     }
     friend constexpr float absSquared(const VectorF & v);
-    friend constexpr float abs(const VectorF & v);
+    friend float abs(const VectorF & v);
     friend VectorF normalize(const VectorF & v);
-    friend constexpr VectorF normalize(const VectorF & v, std::nothrow_t);
+    friend VectorF normalize(const VectorF & v, std::nothrow_t);
     const VectorF & operator +=(VectorF rt)
     {
         return operator =(operator +(rt));
@@ -156,14 +156,14 @@ constexpr float absSquared(const VectorF & v)
     return v.x * v.x + v.y * v.y + v.z * v.z;
 }
 
-constexpr float abs(const VectorF & v)
+inline float abs(const VectorF & v)
 {
     return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
 namespace
 {
-constexpr float normalizeNoThrowHelper(float v)
+inline float normalizeNoThrowHelper(float v)
 {
     return (v == 0) ? 1 : v;
 }
@@ -177,7 +177,7 @@ inline VectorF normalize(const VectorF & v)
     return v / r;
 }
 
-constexpr VectorF normalizeNoThrow(const VectorF & v)
+inline VectorF normalizeNoThrow(const VectorF & v)
 {
     return v / normalizeNoThrowHelper(abs(v));
 }

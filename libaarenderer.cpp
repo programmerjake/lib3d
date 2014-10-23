@@ -1,3 +1,4 @@
+#ifndef __EMSCRIPTEN__
 #include "libaarenderer.h"
 #include "softrender.h"
 #include <aalib.h>
@@ -125,3 +126,4 @@ shared_ptr<WindowRenderer> makeLibAARenderer()
 {
     return make_shared<LibAARenderer>();
 }
+#endif

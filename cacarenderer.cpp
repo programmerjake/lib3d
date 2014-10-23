@@ -1,3 +1,4 @@
+#ifndef __EMSCRIPTEN__
 #include "cacarenderer.h"
 #include "softrender.h"
 #include <caca.h>
@@ -145,3 +146,4 @@ shared_ptr<WindowRenderer> makeCacaRenderer()
 {
     return make_shared<CacaRenderer>();
 }
+#endif

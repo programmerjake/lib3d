@@ -1,3 +1,4 @@
+#ifndef __EMSCRIPTEN__
 #include "rawrenderer.h"
 #include <memory>
 #include <fstream>
@@ -222,3 +223,4 @@ shared_ptr<WindowRenderer> makeRawRenderer()
 {
     return make_shared<RawRenderer>();
 }
+#endif

@@ -1,3 +1,4 @@
+#ifndef __EMSCRIPTEN__
 #include "svgarenderer.h"
 #include <vga.h>
 #include <vgagl.h>
@@ -317,3 +318,4 @@ shared_ptr<WindowRenderer> makeSVGARenderer()
 {
     return make_shared<SVGARenderer>();
 }
+#endif // __EMSCRIPTEN__

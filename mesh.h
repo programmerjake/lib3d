@@ -21,7 +21,7 @@ struct TransformedMesh
     {
         assert(mesh != nullptr);
     }
-    operator Mesh() const;
+//    operator Mesh() const;
     operator shared_ptr<Mesh>() const;
 };
 
@@ -34,7 +34,7 @@ struct ColorizedMesh
     {
         assert(mesh != nullptr);
     }
-    operator Mesh() const;
+//    operator Mesh() const;
     operator shared_ptr<Mesh>() const;
 };
 
@@ -48,7 +48,7 @@ struct ColorizedTransformedMesh
     {
         assert(mesh != nullptr);
     }
-    operator Mesh() const;
+//    operator Mesh() const;
     operator shared_ptr<Mesh>() const;
 };
 
@@ -202,30 +202,30 @@ struct Mesh
     }
 };
 
-inline TransformedMesh::operator Mesh() const
-{
-    return Mesh(*this);
-}
+//inline TransformedMesh::operator Mesh() const
+//{
+//    return Mesh(*this);
+//}
 
 inline TransformedMesh::operator shared_ptr<Mesh>() const
 {
     return shared_ptr<Mesh>(new Mesh(*this));
 }
 
-inline ColorizedMesh::operator Mesh() const
-{
-    return Mesh(*this);
-}
+//inline ColorizedMesh::operator Mesh() const
+//{
+//    return Mesh(*this);
+//}
 
 inline ColorizedMesh::operator shared_ptr<Mesh>() const
 {
     return shared_ptr<Mesh>(new Mesh(*this));
 }
 
-inline ColorizedTransformedMesh::operator Mesh() const
-{
-    return Mesh(*this);
-}
+//inline ColorizedTransformedMesh::operator Mesh() const
+//{
+//    return Mesh(*this);
+//}
 
 inline ColorizedTransformedMesh::operator shared_ptr<Mesh>() const
 {

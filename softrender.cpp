@@ -1,9 +1,11 @@
 #include "softrender.h"
 #include <utility>
 #include <iostream>
+#ifndef __EMSCRIPTEN__
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#endif
 #include <functional>
 #include <memory>
 
@@ -265,6 +267,7 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
     }
 }
 
+#ifndef __EMSCRIPTEN__
 namespace
 {
 struct RenderThreadState final
@@ -435,23 +438,32 @@ RenderThreadPool &getRenderThreadPool()
     return retval;
 }
 }
+#endif
 
 void SoftwareRenderer::render(const Mesh &m)
 {
     shared_ptr<const Image> texture = ((m.image != nullptr) ? m.image->getImage() : whiteTexture);
 
+#ifndef __EMSCRIPTEN__
     size_t threadCount = thread::hardware_concurrency();
     if(threadCount == 0)
         threadCount = 1;
     size_t threadsLeft = threadCount;
     mutex threadsLeftLock;
     condition_variable threadsLeftCond;
+#else
+    const size_t threadCount = 1;
+#endif
 
     size_t h = image->h;
 
     for(size_t i = 0; i < threadCount; i++)
     {
-        function<void()> fn = [i, threadCount, h, texture, &threadsLeft, &threadsLeftLock, &threadsLeftCond, &m, this]()
+        function<void()> fn = [i, threadCount, h, texture,
+#ifndef __EMSCRIPTEN__
+                                &threadsLeft, &threadsLeftLock, &threadsLeftCond,
+#endif // __EMSCRIPTEN__
+                                &m, this]()
         {
             size_t startY = i * h / threadCount;
             size_t endY = (i + 1) * h / threadCount;
@@ -461,15 +473,23 @@ void SoftwareRenderer::render(const Mesh &m)
             {
                 renderTriangle(tri, startY, endY, texture);
             }
+#ifndef __EMSCRIPTEN__
             unique_lock<mutex> lockIt(threadsLeftLock);
             threadsLeft--;
             threadsLeftCond.notify_all();
+#endif // __EMSCRIPTEN__
         };
+#ifndef __EMSCRIPTEN__
         getRenderThreadPool().start(fn);
+#else
+        fn();
+#endif
     }
+#ifndef __EMSCRIPTEN__
     unique_lock<mutex> lockIt(threadsLeftLock);
     while(threadsLeft > 0)
         threadsLeftCond.wait(lockIt);
+#endif
 }
 
 shared_ptr<Texture> SoftwareRenderer::finish()

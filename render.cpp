@@ -11,7 +11,9 @@
 #include <cassert>
 #include <iostream>
 #include <string>
+#ifndef __EMSCRIPTEN__
 #include <GL/gl.h>
+#endif // __EMSCRIPTEN__
 #include <functional>
 #include <sstream>
 #include "generate.h"
@@ -84,9 +86,14 @@ namespace
 class SDLWindowRenderer : public WindowRenderer
 {
 private:
+#ifdef __EMSCRIPTEN__
+    SDL_Surface *screen;
+    SDL_Surface *texture;
+#else
     SDL_Window * window;
     SDL_Texture * texture;
     SDL_Renderer * sdlRenderer;
+#endif // __EMSCRIPTEN__
     shared_ptr<ImageRenderer> imageRenderer;
     size_t w, h;
     float aspectRatio;
@@ -97,25 +104,46 @@ public:
         {
             throw runtime_error(string("SDL_Init Error : ") + SDL_GetError());
         }
+#ifdef __EMSCRIPTEN__
+        screen = SDL_SetVideoMode(getDefaultRendererWidth(), getDefaultRendererHeight(), 32, SDL_ANYFORMAT | SDL_RESIZABLE);
+        if(screen == nullptr)
+        {
+            string msg = string("SDL_SetVideoMode Error : ") + SDL_GetError();
+            SDL_Quit();
+            throw runtime_error(msg);
+        }
+#else
         if(SDL_CreateWindowAndRenderer(getDefaultRendererWidth(), getDefaultRendererHeight(), SDL_WINDOW_RESIZABLE, &window, &sdlRenderer) != 0)
         {
             string msg = string("SDL_CreateWindowAndRenderer Error : ") + SDL_GetError();
             SDL_Quit();
             throw runtime_error(msg);
         }
+#endif
         int wi, hi;
+#ifdef __EMSCRIPTEN__
+        wi = screen->w;
+        hi = screen->h;
+#else
         SDL_GetWindowSize(window, &wi, &hi);
+#endif
         w = wi;
         h = hi;
         aspectRatio = getDefaultRendererAspectRatio();
         if(w <= 0) w = 1;
         if(h <= 0) h = 1;
+#ifdef __EMSCRIPTEN__
+        texture = SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 32, RGBAI(0xFF, 0, 0, 0), RGBAI(0, 0xFF, 0, 0), RGBAI(0, 0, 0xFF, 0), RGBAI(0, 0, 0, 0xFF));
+#else
         texture = SDL_CreateTexture(sdlRenderer, SDL_MasksToPixelFormatEnum(32, RGBAI(0xFF, 0, 0, 0), RGBAI(0, 0xFF, 0, 0), RGBAI(0, 0, 0xFF, 0), RGBAI(0, 0, 0, 0xFF)), SDL_TEXTUREACCESS_STREAMING, w, h);
+#endif
         if(texture == nullptr)
         {
             string msg = string("SDL_CreateTexture Error : ") + SDL_GetError();
+#ifndef __EMSCRIPTEN__
             SDL_DestroyRenderer(sdlRenderer);
             SDL_DestroyWindow(window);
+#endif
             SDL_Quit();
             throw runtime_error(msg);
         }
@@ -123,9 +151,13 @@ public:
     }
     virtual ~SDLWindowRenderer()
     {
+#ifdef __EMSCRIPTEN__
+        SDL_FreeSurface(texture);
+#else
         SDL_DestroyTexture(texture);
         SDL_DestroyRenderer(sdlRenderer);
         SDL_DestroyWindow(window);
+#endif
         SDL_Quit();
     }
 protected:
@@ -155,7 +187,13 @@ public:
         assert(image.h == h);
         void * pixels;
         int pitch;
+#ifdef __EMSCRIPTEN__
+        SDL_LockSurface(texture);
+        pixels = texture->pixels;
+        pitch = texture->pitch;
+#else
         verify(0 == SDL_LockTexture(texture, nullptr, &pixels, &pitch));
+#endif
         for(size_t y = 0; y < h; y++)
         {
             for(size_t x = 0; x < w; x++)
@@ -163,10 +201,16 @@ public:
                 *(uint32_t *)((char *)pixels + pitch * y + sizeof(uint32_t) * x) = image.getPixel(x, y);
             }
         }
+#ifdef __EMSCRIPTEN__
+        SDL_UnlockSurface(texture);
+        SDL_BlitSurface(texture, nullptr, screen, nullptr);
+        SDL_Flip(screen);
+#else
         SDL_UnlockTexture(texture);
         SDL_RenderClear(sdlRenderer);
         SDL_RenderCopy(sdlRenderer, texture, nullptr, nullptr);
         SDL_RenderPresent(sdlRenderer);
+#endif // __EMSCRIPTEN__
         calcFPS();
         SDL_Event event;
         while(SDL_PollEvent(&event))
@@ -180,18 +224,33 @@ public:
                 if(event.key.keysym.sym == SDLK_ESCAPE || (event.key.keysym.sym == SDLK_F4 && (event.key.keysym.mod & (KMOD_CTRL | KMOD_SHIFT)) == 0 && (event.key.keysym.mod & KMOD_ALT) != 0))
                     exit(0);
                 break;
+#ifdef __EMSCRIPTEN__
+            case SDL_VIDEORESIZE:
+                screen = SDL_SetVideoMode(event.resize.w, event.resize.h, 32, SDL_ANYFORMAT | SDL_RESIZABLE);
+                break;
+#endif // __EMSCRIPTEN__
             }
         }
         int wi, hi;
+#ifdef __EMSCRIPTEN__
+        wi = screen->w;
+        hi = screen->h;
+#else
         SDL_GetWindowSize(window, &wi, &hi);
+#endif
         if(wi <= 0) wi = 1;
         if(hi <= 0) hi = 1;
         if((int)w != wi || (int)h != hi)
         {
             w = wi;
             h = hi;
+#ifdef __EMSCRIPTEN__
+            SDL_FreeSurface(texture);
+            texture = SDL_CreateRGBSurface(SDL_SWSURFACE, w, h, 32, RGBAI(0xFF, 0, 0, 0), RGBAI(0, 0xFF, 0, 0), RGBAI(0, 0, 0xFF, 0), RGBAI(0, 0, 0, 0xFF));
+#else
             SDL_DestroyTexture(texture);
             texture = SDL_CreateTexture(sdlRenderer, SDL_MasksToPixelFormatEnum(32, RGBAI(0xFF, 0, 0, 0), RGBAI(0, 0xFF, 0, 0), RGBAI(0, 0, 0xFF, 0), RGBAI(0, 0, 0, 0xFF)), SDL_TEXTUREACCESS_STREAMING, w, h);
+#endif
             if(texture == nullptr)
             {
                 throw runtime_error(string("SDL_CreateTexture Error : ") + SDL_GetError());
@@ -200,7 +259,7 @@ public:
         }
     }
 };
-
+#ifndef __EMSCRIPTEN__
 class OpenGLWindowRenderer : public WindowRenderer
 {
     friend class OpenGLImageRenderer;
@@ -981,7 +1040,7 @@ public:
         setup();
     }
 };
-
+#endif
 class NullWindowRenderer : public WindowRenderer
 {
 private:
@@ -1024,6 +1083,7 @@ shared_ptr<ImageRenderer> makeSoftwareImageRenderer(size_t w, size_t h, float as
 
 shared_ptr<ImageRenderer> makeOpenGLImageRenderer(size_t w, size_t h, float aspectRatio)
 {
+#ifndef __EMSCRIPTEN__
     try
     {
         return make_shared<OpenGLImageRenderer>(w, h, aspectRatio);
@@ -1031,6 +1091,7 @@ shared_ptr<ImageRenderer> makeOpenGLImageRenderer(size_t w, size_t h, float aspe
     catch(exception & e)
     {
     }
+#endif
     return makeSoftwareImageRenderer(w, h, aspectRatio);
 }
 
@@ -1057,6 +1118,7 @@ struct Driver
     }
 };
 
+#ifndef __EMSCRIPTEN__
 shared_ptr<WindowRenderer> makeFFmpegNoOpenGLRenderer()
 {
     shared_ptr<WindowRenderer> retval = makeFFmpegRenderer();
@@ -1154,19 +1216,26 @@ shared_ptr<WindowRenderer> makeFFmpegOpenGLRenderer()
 {
     return make_shared<FFmpegOpenGLRenderer>();
 }
+#endif
 
 const Driver drivers[] =
 {
+#ifndef __EMSCRIPTEN__
     Driver("opengl", []()->shared_ptr<WindowRenderer>{return make_shared<OpenGLWindowRenderer>();}, makeOpenGLImageRenderer),
     Driver("opengl-no-fbo", []()->shared_ptr<WindowRenderer>{return make_shared<OpenGLWindowRenderer>();}, makeSoftwareImageRenderer),
+#endif
     Driver("sdl", []()->shared_ptr<WindowRenderer>{return make_shared<SDLWindowRenderer>();}, makeSoftwareImageRenderer),
+#ifndef __EMSCRIPTEN__
     Driver("caca", makeCacaRenderer, makeSoftwareImageRenderer),
     Driver("aalib", makeLibAARenderer, makeSoftwareImageRenderer),
     Driver("svga", makeSVGARenderer, makeSoftwareImageRenderer),
+#endif
     Driver("null", []()->shared_ptr<WindowRenderer>{return make_shared<NullWindowRenderer>();}, makeSoftwareImageRenderer),
+#ifndef __EMSCRIPTEN__
     Driver("ffmpeg", makeFFmpegOpenGLRenderer, makeOpenGLImageRenderer),
     Driver("ffmpeg-no-opengl", makeFFmpegNoOpenGLRenderer, makeSoftwareImageRenderer),
     Driver("raw", makeRawRenderer, makeSoftwareImageRenderer),
+#endif
 };
 
 constexpr int driverCount = sizeof(drivers) / sizeof(drivers[0]);

@@ -1,3 +1,4 @@
+#ifndef __EMSCRIPTEN__
 #include "ffmpeg_renderer.h"
 #include <memory>
 extern "C"
@@ -483,3 +484,4 @@ shared_ptr<WindowRenderer> makeFFmpegRenderer(function<shared_ptr<ImageRenderer>
 {
     return make_shared<FFmpegRenderer>(imageRendererMaker);
 }
+#endif

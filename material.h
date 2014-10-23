@@ -11,7 +11,7 @@ struct Light
 {
     VectorF direction;
     ColorF color;
-    constexpr Light(VectorF direction = VectorF(0), ColorF color = GrayscaleF(1))
+    Light(VectorF direction = VectorF(0), ColorF color = GrayscaleF(1))
         : direction(normalizeNoThrow(direction)), color(color)
     {
     }
@@ -24,8 +24,8 @@ struct Light
     }
 };
 
-template <typename ...Args>
-struct LightListLiteral;
+//template <typename ...Args>
+//struct LightListLiteral;
 
 struct Material
 {
@@ -57,11 +57,11 @@ struct Material
         : ambient(ambient), diffuse(diffuse), opacity(diffuse.a), texture(texture)
     {
     }
-    template <typename ...Args>
-    ColorF eval(const LightListLiteral<Args...> &lights, ColorF vertexColor, VectorF vertexNormal, VectorF vertexPosition) const
-    {
-        return evalFinalize(lights.eval(*this, vertexNormal, vertexPosition), vertexColor);
-    }
+//    template <typename ...Args>
+//    ColorF eval(const LightListLiteral<Args...> &lights, ColorF vertexColor, VectorF vertexNormal, VectorF vertexPosition) const
+//    {
+//        return evalFinalize(lights.eval(*this, vertexNormal, vertexPosition), vertexColor);
+//    }
     ColorF eval(const vector<Light> &lights, ColorF vertexColor, VectorF vertexNormal, VectorF vertexPosition) const
     {
         ColorF retval = evalGlobal(vertexNormal, vertexPosition);
@@ -88,7 +88,7 @@ struct Material
         return !operator ==(rt);
     }
 };
-
+#if 0
 template <>
 struct LightListLiteral<>
 {
@@ -115,11 +115,11 @@ struct LightListLiteral<Light, Args...>
         return material.evalCombine(rest.eval(material, vertexNormal, vertexPosition), first.evalLight(vertexNormal, vertexPosition));
     }
 };
-
+#endif
 template <typename ...Args>
-constexpr LightListLiteral<Args...> make_light_list(Args ...args)
+inline vector<Light> make_light_list(Args ...args)
 {
-    return LightListLiteral<Args...>(args...);
+    return vector<Light>{args...};
 }
 
 template <typename T>
@@ -138,9 +138,9 @@ struct LitMaterial
 };
 
 template <typename ...Args>
-constexpr LitMaterial<LightListLiteral<Args...>> light_material(const Material &material, Args ...args)
+inline LitMaterial<vector<Light>> light_material(const Material &material, Args ...args)
 {
-    return LitMaterial<LightListLiteral<Args...>>(material, make_light_list(args...));
+    return LitMaterial<vector<Light>>(material, make_light_list(args...));
 }
 
 inline LitMaterial<vector<Light>> light_material(const Material &material, const vector<Light> &lights)
