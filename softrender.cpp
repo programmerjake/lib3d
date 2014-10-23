@@ -2,6 +2,10 @@
 #include <utility>
 #include <iostream>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <functional>
+#include <memory>
 
 using namespace std;
 
@@ -261,21 +265,193 @@ void SoftwareRenderer::renderTriangle(Triangle triangleIn, size_t sectionTop, si
     }
 }
 
+namespace
+{
+struct RenderThreadState final
+{
+    mutex lock;
+    condition_variable cond;
+    thread theThread;
+    enum class State
+    {
+        Stopped,
+        Waiting,
+        Starting,
+        Stopping,
+        Running
+    };
+    State state = State::Stopped;
+    function<void()> currentRunFunction = nullptr;
+    void run_fn()
+    {
+        unique_lock<mutex> lockIt(lock);
+        state = State::Waiting;
+        cond.notify_all();
+        while(state != State::Stopping)
+        {
+            while(state == State::Waiting)
+                cond.wait(lockIt);
+            if(state == State::Starting)
+            {
+                state = State::Running;
+                cond.notify_all();
+                currentRunFunction();
+                state = State::Waiting;
+                cond.notify_all();
+            }
+            else
+                break;
+        }
+        state = State::Stopped;
+        cond.notify_all();
+    }
+    void wait()
+    {
+        unique_lock<mutex> lockIt(lock);
+        while(state == State::Running || state == State::Starting || state == State::Stopping)
+            cond.wait(lockIt);
+    }
+    void stop()
+    {
+        {
+            unique_lock<mutex> lockIt(lock);
+            while(state == State::Running || state == State::Starting || state == State::Stopping)
+                cond.wait(lockIt);
+            if(state == State::Stopped)
+                return;
+            state = State::Stopping;
+            cond.notify_all();
+        }
+        theThread.join();
+    }
+    void start(function<void()> fn)
+    {
+        assert(fn != nullptr);
+        unique_lock<mutex> lockIt(lock);
+        while(state == State::Running || state == State::Starting || state == State::Stopping)
+            cond.wait(lockIt);
+        if(state == State::Stopped)
+        {
+            theThread = thread([this](){run_fn();});
+            while(state == State::Stopped)
+                cond.wait(lockIt);
+        }
+        assert(state == State::Waiting);
+        state = State::Starting;
+        currentRunFunction = fn;
+        cond.notify_all();
+    }
+    bool tryStart(function<void()> fn)
+    {
+        assert(fn != nullptr);
+        unique_lock<mutex> lockIt(lock);
+        if(state == State::Running || state == State::Starting)
+            return false;
+        while(state == State::Stopping)
+            cond.wait(lockIt);
+        if(state == State::Stopped)
+        {
+            theThread = thread([this](){run_fn();});
+            while(state == State::Stopped)
+                cond.wait(lockIt);
+        }
+        assert(state == State::Waiting);
+        state = State::Starting;
+        currentRunFunction = fn;
+        cond.notify_all();
+        return true;
+    }
+    bool available()
+    {
+        unique_lock<mutex> lockIt(lock);
+        switch(state)
+        {
+        case State::Running:
+        case State::Starting:
+            return false;
+        case State::Stopped:
+        case State::Waiting:
+        case State::Stopping:
+            return true;
+        }
+        assert(false);
+        return false;
+    }
+    bool stopped()
+    {
+        unique_lock<mutex> lockIt(lock);
+        switch(state)
+        {
+        case State::Running:
+        case State::Starting:
+        case State::Waiting:
+            return false;
+        case State::Stopped:
+        case State::Stopping:
+            return true;
+        }
+        assert(false);
+        return true;
+    }
+};
+struct RenderThreadPool final
+{
+    vector<unique_ptr<RenderThreadState>> threads;
+    RenderThreadPool()
+    {
+        size_t threadCount = thread::hardware_concurrency();
+        if(threadCount == 0)
+            threadCount = 1;
+        threads.reserve(threadCount);
+        for(size_t i = 0; i < threadCount; i++)
+            threads.push_back(unique_ptr<RenderThreadState>(new RenderThreadState()));
+    }
+    ~RenderThreadPool()
+    {
+        for(unique_ptr<RenderThreadState> &t : threads)
+        {
+            t->stop();
+        }
+    }
+    size_t nextThreadIndex = 0;
+    void start(function<void()> fn)
+    {
+        for(size_t i = 0; i < threads.size(); i++)
+        {
+            size_t index = nextThreadIndex;
+            nextThreadIndex = (nextThreadIndex + 1) % threads.size();
+            if(threads[index]->tryStart(fn))
+                return;
+        }
+        size_t index = nextThreadIndex;
+        nextThreadIndex = (nextThreadIndex + 1) % threads.size();
+        threads[index]->start(fn);
+        return;
+    }
+};
+RenderThreadPool &getRenderThreadPool()
+{
+    static RenderThreadPool retval;
+    return retval;
+}
+}
+
 void SoftwareRenderer::render(const Mesh &m)
 {
     shared_ptr<const Image> texture = ((m.image != nullptr) ? m.image->getImage() : whiteTexture);
 
-    vector<thread> threads;
     size_t threadCount = thread::hardware_concurrency();
     if(threadCount == 0)
         threadCount = 1;
+    size_t threadsLeft = threadCount;
+    mutex threadsLeftLock;
+    condition_variable threadsLeftCond;
 
     size_t h = image->h;
 
-    threads.resize(threadCount);
     for(size_t i = 0; i < threadCount; i++)
     {
-        threads[i] = thread([=]()
+        function<void()> fn = [i, threadCount, h, texture, &threadsLeft, &threadsLeftLock, &threadsLeftCond, &m, this]()
         {
             size_t startY = i * h / threadCount;
             size_t endY = (i + 1) * h / threadCount;
@@ -285,12 +461,15 @@ void SoftwareRenderer::render(const Mesh &m)
             {
                 renderTriangle(tri, startY, endY, texture);
             }
-        });
+            unique_lock<mutex> lockIt(threadsLeftLock);
+            threadsLeft--;
+            threadsLeftCond.notify_all();
+        };
+        getRenderThreadPool().start(fn);
     }
-    for(thread &t : threads)
-    {
-        t.join();
-    }
+    unique_lock<mutex> lockIt(threadsLeftLock);
+    while(threadsLeft > 0)
+        threadsLeftCond.wait(lockIt);
 }
 
 shared_ptr<Texture> SoftwareRenderer::finish()
