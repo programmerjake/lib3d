@@ -40,7 +40,18 @@ inline Mesh reverse(const Mesh & meshIn)
     return Mesh(std::move(triangles), meshIn.image);
 }
 
-inline Mesh shadeMesh(const Mesh &meshIn, function<ColorF(ColorF vertexColor, VectorF vertexNormal, VectorF vertexPosition)> shadeFn)
+inline Mesh reverse(Mesh && meshIn)
+{
+    vector<Triangle> triangles = std::move(meshIn.triangles);
+    for(Triangle & tri : triangles)
+    {
+        tri = reverse(tri);
+    }
+    return Mesh(std::move(triangles), std::move(meshIn.image));
+}
+
+template <typename Fn>
+inline Mesh shadeMesh(const Mesh &meshIn, Fn shadeFn)
 {
     vector<Triangle> triangles;
     triangles.reserve(meshIn.triangles.size());
@@ -60,6 +71,26 @@ inline Mesh shadeMesh(const Mesh &meshIn, function<ColorF(ColorF vertexColor, Ve
     }
 
     return Mesh(std::move(triangles), meshIn.image);
+}
+
+template <typename Fn>
+inline Mesh shadeMesh(Mesh &&meshIn, Fn shadeFn)
+{
+    vector<Triangle> triangles = std::move(meshIn.triangles);
+
+    for(Triangle &tri : triangles)
+    {
+        if(tri.n1 == VectorF(0) || tri.n2 == VectorF(0) || tri.n3 == VectorF(0))
+        {
+            continue;
+        }
+
+        tri.c1 = shadeFn(tri.c1, tri.n1, tri.p1);
+        tri.c2 = shadeFn(tri.c2, tri.n2, tri.p2);
+        tri.c3 = shadeFn(tri.c3, tri.n3, tri.p3);
+    }
+
+    return Mesh(std::move(triangles), std::move(meshIn.image));
 }
 
 namespace Generate

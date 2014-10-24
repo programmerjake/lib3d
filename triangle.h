@@ -73,7 +73,7 @@ struct Triangle
     }
 };
 
-inline Triangle transform(const Matrix & m, const Triangle & t)
+inline Triangle transform(const Transform & m, const Triangle & t)
 {
     return Triangle(transform(m, t.p1), t.t1, t.c1, transformNormal(m, t.n1),
                      transform(m, t.p2), t.t2, t.c2, transformNormal(m, t.n2),

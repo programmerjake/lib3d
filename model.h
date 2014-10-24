@@ -15,13 +15,19 @@ struct Model
 {
     vector<pair<Material, Mesh>> meshes;
     template <typename ...Lights>
-    void render(shared_ptr<Renderer> renderer, Matrix globalToCameraTransform, Matrix localToGlobalTransform, Lights ...lights) const
+    void render(shared_ptr<Renderer> renderer, Transform globalToCameraTransform, Transform localToGlobalTransform, Lights ...lights) const
     {
+        if(meshes.empty())
+            return;
+        Mesh temp;
+        auto lighting = light_material(std::get<0>(meshes[0]), make_light_list(lights...));
         for(const pair<Material, Mesh> &mesh : meshes)
         {
-            Mesh m = transform(localToGlobalTransform, get<1>(mesh));
-            m = shadeMesh(m, light_material(get<0>(mesh), lights...));
-            renderer->render(transform(globalToCameraTransform, m));
+            temp.assign(std::get<1>(mesh));
+            Mesh m = transform(localToGlobalTransform, std::move(temp));
+            lighting.setMaterial(std::get<0>(mesh));
+            temp = transform(globalToCameraTransform, shadeMesh(std::move(m), lighting));
+            renderer->render(temp);
         }
     }
     Model(Mesh mesh, Material material = Material())
@@ -64,6 +70,15 @@ struct Model
             }
         }
         return make_pair(minP, maxP);
+    }
+    size_t triangleCount() const
+    {
+        size_t retval = 0;
+        for(const pair<Material, Mesh> &mesh : meshes)
+        {
+            retval += std::get<1>(mesh).triangleCount();
+        }
+        return retval;
     }
 };
 

@@ -37,6 +37,30 @@ struct Renderer
     {
         render((Mesh)m);
     }
+    void render(TransformedMeshRef m)
+    {
+        render((Mesh)m);
+    }
+    void render(ColorizedTransformedMeshRef m)
+    {
+        render((Mesh)m);
+    }
+    void render(ColorizedMeshRef m)
+    {
+        render((Mesh)m);
+    }
+    void render(TransformedMeshRRef &&m)
+    {
+        render(Mesh(std::move(m)));
+    }
+    void render(ColorizedTransformedMeshRRef &&m)
+    {
+        render(Mesh(std::move(m)));
+    }
+    void render(ColorizedMeshRRef &&m)
+    {
+        render(Mesh(std::move(m)));
+    }
     virtual void calcScales() = 0;
 protected:
     virtual void clearInternal(ColorF bg) = 0;

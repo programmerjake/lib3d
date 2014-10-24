@@ -324,21 +324,6 @@ struct Matrix
     }
 };
 
-constexpr VectorF transform(const Matrix &m, VectorF v)
-{
-    return m.apply(v);
-}
-
-inline VectorF transformNormal(const Matrix &m, VectorF v)
-{
-    return normalizeNoThrow(transpose(inverse(m)).applyNoTranslate(v));
-}
-
-constexpr Matrix transform(const Matrix & a, const Matrix & b)
-{
-    return b.concat(a);
-}
-
 inline bool operator ==(const Matrix &a, const Matrix &b)
 {
     for(int y = 0; y < 4; y++)
@@ -369,6 +354,60 @@ inline bool operator !=(const Matrix &a, const Matrix &b)
     }
 
     return false;
+}
+
+class Transform final
+{
+    Matrix m, invM;
+public:
+    Transform(Matrix m)
+        : m(m), invM(inverse(m))
+    {
+    }
+    constexpr Transform(Matrix m, Matrix invM)
+        : m(m), invM(invM)
+    {
+    }
+    explicit operator Matrix() const
+    {
+        return m;
+    }
+    friend Transform inverse(Transform t)
+    {
+        return Transform(t.invM, t.m);
+    }
+    Matrix get() const
+    {
+        return m;
+    }
+    Matrix getInverse() const
+    {
+        return invM;
+    }
+    Transform concat(Transform r) const
+    {
+        return Transform(get().concat(r.get()), r.getInverse().concat(getInverse()));
+    }
+};
+
+inline VectorF transform(const Transform &m, VectorF v)
+{
+    return m.get().apply(v);
+}
+
+inline VectorF transformNormal(const Transform &m, VectorF v)
+{
+    return normalizeNoThrow(transpose(m.getInverse()).applyNoTranslate(v));
+}
+
+inline Transform transform(const Transform & a, const Transform & b)
+{
+    return b.concat(a);
+}
+
+inline Transform transform(const Transform & a, const Matrix & b)
+{
+    return transform(a, (Transform)b);
 }
 
 #endif // MATRIX_H

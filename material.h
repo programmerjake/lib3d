@@ -125,15 +125,19 @@ inline vector<Light> make_light_list(Args ...args)
 template <typename T>
 struct LitMaterial
 {
-    const Material material;
-    const T lights;
-    constexpr LitMaterial(const Material &material, const T &lights)
+    Material material;
+    T lights;
+    LitMaterial(const Material &material, const T &lights)
         : material(material), lights(lights)
     {
     }
     ColorF operator ()(ColorF vertexColor, VectorF vertexNormal, VectorF vertexPosition) const
     {
         return material.eval(lights, vertexColor, vertexNormal, vertexPosition);
+    }
+    void setMaterial(const Material &material)
+    {
+        this->material = material;
     }
 };
 

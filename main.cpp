@@ -98,6 +98,7 @@ int main(int argc, char **argv)
         {
             shared_ptr<ModelLoader> loader = ModelLoader::loadOBJ(fileName, [](string msg){cout << "model load : warning : " << msg << endl;});
             model = loader->loadAll();
+            cout << "model has " << model->triangleCount() << " triangles." << endl;
         }
         static shared_ptr<WindowRenderer> renderer = getWindowRenderer();
         minstd_rand0 randomGenerator;
@@ -148,7 +149,7 @@ int main(int argc, char **argv)
             if(lastTime != -1)
                 fps = 1 / max<float>(1e-9f, time - lastTime);
             lastTime = time;
-            Matrix tform = (Matrix::rotateY((time - startTime) / 2 * M_PI)).concat(Matrix::translate(0, 0, -30));
+            Transform tform = (Matrix::rotateY((time - startTime) / 2 * M_PI)).concat(Matrix::translate(0, 0, -30));
             renderer->clear();
 #if 0
             imageRenderer->clear(RGBF(1, 1, 1));
@@ -176,7 +177,7 @@ int main(int argc, char **argv)
             ss << L"FPS: " << fps;
             //float textWidth = Generate::Text::width(ss.str());
             float textHeight = Generate::Text::height(ss.str());
-            float textScale = 1 / 10.0f;
+            float textScale = 1 / 6.0;
             renderer->render(transform(Matrix::scale(textScale).concat(Matrix::translate(-renderer->scaleX(), renderer->scaleY() - textHeight * textScale, -1)), Generate::Text::mesh(ss.str(), fontTexture, RGBF(1, 0.5, 1))));
             renderer->flip();
         }
