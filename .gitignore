@@ -12,3 +12,5 @@ lib3d-output.*
 test_objects
 *.a
 *.so
+gmon.out
+lib3d.cscope_file_list
