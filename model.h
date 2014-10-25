@@ -115,6 +115,8 @@ struct ModelLoader
     }
 
     static shared_ptr<ModelLoader> loadOBJ(string fileName, function<void(string)> warningFunction = nullptr);
+    static shared_ptr<ModelLoader> loadAC3D(string fileName, function<void(string)> warningFunction = nullptr);
+    static shared_ptr<ModelLoader> load(string fileName, function<void(string)> warningFunction = nullptr);
 };
 
 #endif // MODEL_H_INCLUDED

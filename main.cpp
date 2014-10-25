@@ -96,7 +96,7 @@ int main(int argc, char **argv)
         string fileName = argc > 1 ? argv[1] : "";
         if(fileName != "")
         {
-            shared_ptr<ModelLoader> loader = ModelLoader::loadOBJ(fileName, [](string msg){cout << "model load : warning : " << msg << endl;});
+            shared_ptr<ModelLoader> loader = ModelLoader::load(fileName, [](string msg){cout << "model load : warning : " << msg << endl;});
             model = loader->loadAll();
             cout << "model has " << model->triangleCount() << " triangles." << endl;
         }

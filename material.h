@@ -4,6 +4,7 @@
 #include "image.h"
 #include "vector.h"
 #include <vector>
+#include <functional> // std::hash
 
 using namespace std;
 
@@ -88,6 +89,33 @@ struct Material
         return !operator ==(rt);
     }
 };
+
+namespace std
+{
+template <>
+struct hash<Material>
+{
+private:
+    hash<float> hash_float;
+    hash<shared_ptr<Texture>> hash_texture;
+public:
+    size_t operator ()(const Material &m) const
+    {
+        size_t retval = hash_float(m.ambient.r);
+        retval += hash_float(m.ambient.g);
+        retval += hash_float(m.ambient.b);
+        retval += hash_float(m.ambient.a);
+        retval += hash_float(m.diffuse.r);
+        retval += hash_float(m.diffuse.g);
+        retval += hash_float(m.diffuse.b);
+        retval += hash_float(m.diffuse.a);
+        retval += hash_float(m.opacity);
+        retval += hash_texture(m.texture);
+        return retval;
+    }
+};
+}
+
 #if 0
 template <>
 struct LightListLiteral<>

@@ -3,9 +3,11 @@
 #include <cassert>
 #include <fstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <climits>
 #include <cstdlib>
 #include <sstream>
+#include <cctype>
 
 using namespace std;
 
@@ -550,9 +552,638 @@ public:
         return make_pair(models[name], name);
     }
 };
+
+class AC3DModelLoader : public ModelLoader // documentation is at http://www.inivis.com/ac3d/man/ac3dfileformat.html
+{
+    ifstream is;
+    static string readLine(istream &is)
+    {
+        if(!is)
+            return "";
+        while(is.peek() != EOF)
+        {
+            if(isspace(is.peek()))
+            {
+                is.get();
+            }
+#if 0
+            else if(is.peek() == '#') // comment
+            {
+                do
+                {
+                    is.get();
+                }
+                while(is.peek() != '\r' && is.peek() != '\n' && is.peek() != EOF);
+            }
+#endif
+            else
+            {
+                break;
+            }
+        }
+        if(is.peek() == EOF)
+            return "";
+        string retval = "";
+        do
+        {
+            retval += (char)is.get();
+        }
+        while(is.peek() != '\r' && is.peek() != '\n' && is.peek() != EOF);
+        return retval;
+    }
+    static vector<string> readTokenizedLine(istream &is)
+    {
+        string line = readLine(is);
+        vector<string> retval;
+        bool isStartOfToken = true, isInString = false;
+        for(char ch : line)
+        {
+            if(ch == '\"')
+            {
+                isInString = !isInString;
+                if(isStartOfToken)
+                    retval.push_back("");
+                isStartOfToken = false;
+                retval.back() += ch;
+            }
+            else if(isblank(ch) && !isInString)
+            {
+                isStartOfToken = true;
+            }
+            else
+            {
+                if(isStartOfToken)
+                    retval.push_back("");
+                isStartOfToken = false;
+                retval.back() += ch;
+            }
+        }
+        return std::move(retval);
+    }
+    static string canonicalizePath(string path)
+    {
+        char * str = realpath(path.c_str(), nullptr);
+        if(str == nullptr)
+            throw ModelLoadException("invalid path '" + path + "'");
+        string retval = str;
+        free(str);
+        return retval;
+    }
+    static bool isAbsolutePath(string path)
+    {
+        return path.substr(0, 1) == "/";
+    }
+    static string getNeighborFileName(string originalFile, string neighborFile)
+    {
+        if(neighborFile == "")
+            return "";
+        if(originalFile == "")
+            return "";
+        if(isAbsolutePath(neighborFile))
+            return canonicalizePath(neighborFile);
+        string file = canonicalizePath(originalFile);
+        file.erase(file.find_last_of('/'));
+        file += "/" + neighborFile;
+        return canonicalizePath(file);
+    }
+    static float parseFloat(string str)
+    {
+        istringstream is(str);
+        float retval;
+        if(!(is >> retval) || !isfinite(retval))
+            throw ModelLoadException("invalid floating-point number '" + str + "'");
+        return retval;
+    }
+    static float parseLimitedFloat(string str, float minV, float maxV, function<void(string)> warningFunction)
+    {
+        float retval = parseFloat(str);
+        if(warningFunction && (retval < minV || retval > maxV))
+        {
+            ostringstream ss;
+            ss << "number out of range (" << minV << " to " << maxV << ") : '" << str << "' : limiting";
+            warningFunction(ss.str());
+        }
+        return limit<float>(retval, minV, maxV);
+    }
+    static int parseInt(string str)
+    {
+        istringstream is(str);
+        int retval;
+        if(!(is >> retval))
+            throw ModelLoadException("invalid integer '" + str + "'");
+        return retval;
+    }
+    static string parseString(string str)
+    {
+        size_t finalSize = 0;
+        for(size_t i = 0; i < str.size(); i++)
+        {
+            if(str[i] != '\"')
+                str[finalSize++] = str[i];
+        }
+        str.resize(finalSize);
+        return str;
+    }
+    static size_t parseIndex(string str, size_t size)
+    {
+        istringstream is(str);
+        ptrdiff_t retval;
+        if(!(is >> retval) || retval < 0 || retval >= (ptrdiff_t)size)
+            throw ModelLoadException("invalid index '" + str + "'");
+        return retval;
+    }
+    ColorF validateColor(ColorF color, function<void(string)> warningFunction)
+    {
+        const float eps = 1e-4;
+        if(color.r < -eps || color.r > 1 + eps || color.g < -eps || color.g > 1 + eps || color.b < -eps || color.b > 1 + eps || color.a < -eps || color.a > 1 + eps)
+        {
+            if(warningFunction)
+                warningFunction("color out of range : limiting");
+        }
+        return RGBAF(limit<float>(color.r, 0, 1), limit<float>(color.g, 0, 1), limit<float>(color.b, 0, 1), limit<float>(color.a, 0, 1));
+    }
+    ColorF parseColorSpecifier(size_t startingIndex, function<void(string)> warningFunction)
+    {
+        if(line.size() < 3 + startingIndex)
+            throw ModelLoadException("too few arguments for " + line[0]);
+        return validateColor(RGBF(parseFloat(line[startingIndex]), parseFloat(line[startingIndex + 1]), parseFloat(line[startingIndex + 2])), warningFunction);
+    }
+    shared_ptr<Texture> loadImage(string fileName)
+    {
+        shared_ptr<Texture> &retval = images[fileName];
+        if(retval == nullptr)
+        {
+            if(fileName == "")
+            {
+                retval = make_shared<ImageTexture>(make_shared<Image>(GrayscaleI(0xFF)));
+            }
+            else
+            {
+                try
+                {
+                    retval = make_shared<ImageTexture>(Image::loadImage(fileName));
+                }
+                catch(exception &e)
+                {
+                    throw ModelLoadException((string)"can not load image : " + e.what());
+                }
+            }
+        }
+        return retval;
+    }
+    vector<pair<shared_ptr<Model>, string>> models;
+    vector<Material> materials;
+    size_t currentReturnedModel = 0;
+    unordered_map<string, shared_ptr<Texture>> images;
+    vector<string> line;
+    template <typename Fn>
+    static void warning(bool doWarning, function<void(string)> warningFunction, Fn msg)
+    {
+        if(doWarning && warningFunction)
+            warningFunction(msg());
+    }
+    void checkLineLength(size_t expectedLength, function<void(string)>)
+    {
+        if(line.size() > expectedLength)
+            throw ModelLoadException("too many arguments for " + line[0]);
+        if(line.size() < expectedLength)
+            throw ModelLoadException("too few arguments for " + line[0]);
+    }
+    pair<shared_ptr<Model>, string> parse(string fileName, function<void(string)> warningFunction)
+    {
+        shared_ptr<Model> model = make_shared<Model>();
+        unordered_map<Material, size_t> materialsMap;
+        if(line[0] == "OBJECT")
+        {
+            checkLineLength(2, warningFunction);
+            string objectKind = parseString(line[1]);
+            if(objectKind != "world" && objectKind != "group" && objectKind != "poly")
+                throw ModelLoadException("unknown kind : " + line[0]);
+            Matrix tform = Matrix::identity();
+            string name = "", data = "", url = "";
+            shared_ptr<Texture> texture = loadImage("");
+            vector<VectorF> vertices;
+            vector<tuple<VectorF, TextureCoord>> polyVertices;
+            //float textureRepeatX = 1, textureRepeatY = 1;
+            //float creaseAngle = 0; // i don't really know the default
+            for(line = readTokenizedLine(is); !line.empty(); line = readTokenizedLine(is))
+            {
+                if(line[0] == "name")
+                {
+                    checkLineLength(2, warningFunction);
+                    name = parseString(line[1]);
+                }
+                else if(line[0] == "data")
+                {
+                    checkLineLength(2, warningFunction);
+                    int charCount = parseInt(line[1]);
+                    if(charCount < 1)
+                        throw ModelLoadException("invalid character count for data : " + line[1]);
+                    if(is.peek() == '\r')
+                    {
+                        is.get();
+                        if(is.peek() == '\n')
+                            is.get();
+                    }
+                    else if(is.peek() == '\n')
+                    {
+                        is.get();
+                    }
+                    else
+                        throw ModelLoadException("missing data line");
+                    for(int i = 0; i < charCount; i++)
+                    {
+                        int ch = is.get();
+                        if(ch == EOF)
+                            throw ModelLoadException("missing rest of data line");
+                        data += (char)ch;
+                    }
+                }
+                else if(line[0] == "texture")
+                {
+                    checkLineLength(2, warningFunction);
+                    string imageName = getNeighborFileName(fileName, parseString(line[1]));
+                    texture = loadImage(imageName);
+                }
+                else if(line[0] == "texrep")
+                {
+                    checkLineLength(3, warningFunction);
+                    //textureRepeatX =
+                    parseLimitedFloat(line[1], 1, 1, warningFunction);
+                    //textureRepeatY =
+                    parseLimitedFloat(line[2], 1, 1, warningFunction);
+                }
+                else if(line[0] == "rot")
+                {
+                    checkLineLength(10, warningFunction);
+                    tform.x00 = parseFloat(line[1]);
+                    tform.x01 = parseFloat(line[2]);
+                    tform.x02 = parseFloat(line[3]);
+                    tform.x10 = parseFloat(line[4]);
+                    tform.x11 = parseFloat(line[5]);
+                    tform.x12 = parseFloat(line[6]);
+                    tform.x20 = parseFloat(line[7]);
+                    tform.x21 = parseFloat(line[8]);
+                    tform.x22 = parseFloat(line[9]);
+                    float maxV = max<float>(abs(tform.x00), abs(tform.x01));
+                    maxV = max<float>(maxV, abs(tform.x02));
+                    maxV = max<float>(maxV, abs(tform.x10));
+                    maxV = max<float>(maxV, abs(tform.x11));
+                    maxV = max<float>(maxV, abs(tform.x12));
+                    maxV = max<float>(maxV, abs(tform.x20));
+                    maxV = max<float>(maxV, abs(tform.x21));
+                    maxV = max<float>(maxV, abs(tform.x22));
+                    if(maxV < 1e-20 || abs(tform.determinant()) / maxV < 1e-5)
+                    {
+                        throw ModelLoadException("invalid rotation matrix : can not invert : " + line[0]);
+                    }
+                }
+                else if(line[0] == "loc")
+                {
+                    checkLineLength(4, warningFunction);
+                    VectorF translation;
+                    translation.x = parseFloat(line[1]);
+                    translation.y = parseFloat(line[2]);
+                    translation.z = parseFloat(line[3]);
+                    tform = tform.concat(Matrix::translate(translation));
+                }
+                else if(line[0] == "url")
+                {
+                    checkLineLength(2, warningFunction);
+                    url = parseString(line[1]);
+                }
+                else if(line[0] == "crease") // from http://www.inivis.com/forum/showthread.php?t=5936
+                {
+                    checkLineLength(2, warningFunction);
+                    //creaseAngle =
+                    parseLimitedFloat(line[1], 0, 180, warningFunction);
+                }
+                else if(line[0] == "numvert")
+                {
+                    checkLineLength(2, warningFunction);
+                    int vertexCount = parseInt(line[1]);
+                    if(vertexCount < 0)
+                    {
+                        throw ModelLoadException("invalid vertex count : " + line[0]);
+                    }
+                    warning(vertexCount == 0, warningFunction, []()->string{return "zero vertices for numvert";});
+                    for(int i = 0; i < vertexCount; i++)
+                    {
+                        line = readTokenizedLine(is);
+                        if(line.empty())
+                            throw ModelLoadException("too few lines in file : numvert");
+                        if(line.size() < 3)
+                            throw ModelLoadException("too few numbers on line : numvert");
+                        if(line.size() > 3)
+                            throw ModelLoadException("too many numbers on line : numvert");
+                        VectorF v;
+                        v.x = parseFloat(line[0]);
+                        v.y = parseFloat(line[1]);
+                        v.z = parseFloat(line[2]);
+                        vertices.push_back(transform(tform, v));
+                    }
+                }
+                else if(line[0] == "numsurf")
+                {
+                    checkLineLength(2, warningFunction);
+                    int surfaceCount = parseInt(line[1]);
+                    if(surfaceCount < 0)
+                    {
+                        throw ModelLoadException("invalid surface count : " + line[0]);
+                    }
+                    warning(surfaceCount == 0, warningFunction, []()->string{return "zero surfaces for numsurf";});
+                    for(int i = 0; i < surfaceCount; i++)
+                    {
+                        line = readTokenizedLine(is);
+                        if(line.empty())
+                            throw ModelLoadException("too few lines in file : numsurf");
+                        if(line[0] != "SURF")
+                            throw ModelLoadException("missing SURF : numsurf");
+                        checkLineLength(2, warningFunction);
+                        int flags = parseInt(line[1]);
+                        if(flags < 0)
+                            throw ModelLoadException("invalid SURF flags : out of range");
+                        const int shadedFlagMask = 0x10, twoSidedFlagMask = 0x20, typeMask = 0xF;
+                        enum
+                        {
+                            typePolygon = 0,
+                            typeLineLoop = 1,
+                            typeLine = 2
+                        };
+                        if((flags & typeMask) > 2)
+                            throw ModelLoadException("invalid SURF flags : invalid type");
+                        bool isShaded = false;
+                        if(flags & shadedFlagMask)
+                            isShaded = true;
+                        bool isTwoSided = false;
+                        if(flags & twoSidedFlagMask)
+                            isTwoSided = true;
+                        bool isLine = (flags & typeMask) != typePolygon;
+                        warning((flags & ~(typeMask | shadedFlagMask | twoSidedFlagMask)) != 0, warningFunction, []()->string
+                        {
+                            return "unknown flag set : SURF";
+                        });
+                        warning(isLine, warningFunction, []()->string
+                        {
+                            return "lines ignored : SURF";
+                        });
+                        line = readTokenizedLine(is);
+                        Material material = Material(GrayscaleF(1), GrayscaleF(0), 1, texture);
+                        if(line.empty())
+                            throw ModelLoadException("too few lines in file : SURF");
+                        if(line[0] == "mat")
+                        {
+                            checkLineLength(2, warningFunction);
+                            size_t materialIndex = parseIndex(line[1], materials.size());
+                            if(isShaded)
+                            {
+                                material = materials[materialIndex];
+                                material.texture = texture;
+                            }
+                            line = readTokenizedLine(is);
+                        }
+                        if(line[0] == "refs")
+                        {
+                            checkLineLength(2, warningFunction);
+                            int vertexCount = parseInt(line[1]);
+                            if(vertexCount <= 0)
+                                throw ModelLoadException("vertex count out of range : refs");
+                            polyVertices.clear();
+                            polyVertices.reserve(vertexCount);
+                            for(int i = 0; i < vertexCount; i++)
+                            {
+                                line = readTokenizedLine(is);
+                                if(line.empty())
+                                    throw ModelLoadException("too few lines in file : refs");
+                                if(line.size() < 3)
+                                    throw ModelLoadException("too few numbers on line : refs");
+                                if(line.size() > 3)
+                                    throw ModelLoadException("too many numbers on line : refs");
+                                size_t vertexIndex = parseIndex(line[0], vertices.size());
+                                TextureCoord tc;
+                                tc.u = parseFloat(line[1]);
+                                tc.v = parseFloat(line[2]);
+                                polyVertices.push_back(tuple<VectorF, TextureCoord>(vertices[vertexIndex], tc));
+                            }
+                            if(!isLine)
+                            {
+                                warning(vertexCount < 3, warningFunction, []()->string
+                                {
+                                    return "too few vertices to make a polygon : ignored";
+                                });
+                                if(vertexCount >= 3)
+                                {
+                                    Mesh theMesh = Generate::convexPolygon(texture, polyVertices);
+                                    if(isTwoSided)
+                                        theMesh.append(reverse(theMesh));
+                                    if(materialsMap.count(material) == 0)
+                                    {
+                                        materialsMap[material] = model->meshes.size();
+                                        model->meshes.push_back(pair<Material, Mesh>(material, theMesh));
+                                    }
+                                    else
+                                    {
+                                        std::get<1>(model->meshes[materialsMap[material]]).append(theMesh);
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            throw ModelLoadException("unknown directive : " + line[0]);
+                        }
+                    }
+                }
+                else if(line[0] == "kids")
+                {
+                    checkLineLength(2, warningFunction);
+                    int kidCount = parseInt(line[1]);
+                    if(kidCount < 0)
+                    {
+                        throw ModelLoadException("invalid kid count : " + line[0]);
+                    }
+                    line = readTokenizedLine(is);
+                    for(int i = 0; i < kidCount; i++)
+                    {
+                        shared_ptr<Model> kidModel = std::get<0>(parse(fileName, warningFunction));
+                        for(pair<Material, Mesh> &mesh : kidModel->meshes)
+                        {
+                            Mesh theMesh = transform(tform, std::move(std::get<1>(mesh)));
+                            Material material = std::get<0>(mesh);
+                            if(materialsMap.count(material) == 0)
+                            {
+                                materialsMap[material] = model->meshes.size();
+                                model->meshes.push_back(pair<Material, Mesh>(material, theMesh));
+                            }
+                            else
+                            {
+                                std::get<1>(model->meshes[materialsMap[material]]).append(theMesh);
+                            }
+                        }
+                    }
+                    break;
+                }
+                else
+                    break;
+            }
+            return pair<shared_ptr<Model>, string>(model, name);
+        }
+        else
+        {
+            throw ModelLoadException("unknown directive : " + line[0]);
+        }
+    }
+public:
+    AC3DModelLoader(string fileName, function<void(string)> warningFunction)
+        : is(fileName.c_str())
+    {
+        if(!is)
+            throw ModelLoadException("can't open '" + fileName + "'");
+        string magicLine = readLine(is);
+        if(magicLine.substr(0, 4) != "AC3D")
+            throw ModelLoadException("AC3D magic string doesn't match");
+        if(magicLine.substr(4) != "b")
+            throw ModelLoadException("invalid AC3D version number");
+        line = readTokenizedLine(is);
+        while(!line.empty() && line[0] == "MATERIAL") // material definition
+        {
+            // MATERIAL (name) rgb %f %f %f  amb %f %f %f  emis %f %f %f  spec %f %f %f  shi %d  trans %f
+            // 0        1      2   3  4  5   6   7  8  9   10   11 12 13  14   15 16 17  18  19  20    21
+            checkLineLength(22, warningFunction);
+            string name = parseString(line[1]);
+            if(line[2] != "rgb")
+                throw ModelLoadException("missing rgb for " + line[0]);
+            ColorF rgb = parseColorSpecifier(3, warningFunction);
+            if(line[6] != "amb")
+                throw ModelLoadException("missing amb for " + line[0]);
+            ColorF amb = parseColorSpecifier(7, warningFunction);
+            if(line[10] != "emis")
+                throw ModelLoadException("missing emis for " + line[0]);
+            ColorF emis = parseColorSpecifier(11, warningFunction);
+            if(line[14] != "spec")
+                throw ModelLoadException("missing spec for " + line[0]);
+            //ColorF spec =
+            parseColorSpecifier(15, warningFunction);
+            if(line[18] != "shi")
+                throw ModelLoadException("missing shi for " + line[0]);
+            //int shi =
+            parseInt(line[19]);
+            if(line[20] != "trans")
+                throw ModelLoadException("missing trans for " + line[0]);
+            float opacity = 1 - parseLimitedFloat(line[21], 0, 1, warningFunction);
+
+            materials.push_back(Material(add(amb, emis), rgb, opacity));
+            line = readTokenizedLine(is);
+        }
+        while(!line.empty())
+            models.push_back(parse(fileName, warningFunction));
+        is.close();
+    }
+    virtual pair<shared_ptr<Model>, string> load() override
+    {
+        if(currentReturnedModel >= models.size())
+            return make_pair(nullptr, "");
+        return models[currentReturnedModel++];
+    }
+};
 }
 
 shared_ptr<ModelLoader> ModelLoader::loadOBJ(string fileName, function<void(string)> warningFunction)
 {
     return make_shared<OBJModelLoader>(fileName, warningFunction);
+}
+
+shared_ptr<ModelLoader> ModelLoader::loadAC3D(string fileName, function<void(string)> warningFunction)
+{
+    return make_shared<AC3DModelLoader>(fileName, warningFunction);
+}
+
+namespace
+{
+struct Loader
+{
+    typedef shared_ptr<ModelLoader> (*LoadFn)(string fileName, function<void(string)> warningFunction);
+    LoadFn loadFn;
+    const char *const *extensions;
+    constexpr Loader(LoadFn loadFn, const char *const *extensions)
+        : loadFn(loadFn), extensions(extensions)
+    {
+    }
+};
+const char *loaderExtensionsOBJ[] =
+{
+    "obj",
+    nullptr
+};
+const char *loaderExtensionsAC3D[] =
+{
+    "ac",
+    nullptr
+};
+const Loader loaders[] =
+{
+    Loader(&ModelLoader::loadOBJ, loaderExtensionsOBJ),
+    Loader(&ModelLoader::loadAC3D, loaderExtensionsAC3D),
+};
+}
+
+shared_ptr<ModelLoader> ModelLoader::load(string fileName, function<void(string)> warningFunction)
+{
+    string extension = "";
+    if(fileName.size() > 0)
+    {
+        size_t lastPeriod = fileName.find_last_of('.');
+        size_t lastSlash = fileName.find_last_of('/');
+        if(lastSlash != string::npos && lastPeriod != string::npos && lastSlash > lastPeriod)
+            lastPeriod = string::npos;
+        if(lastPeriod != string::npos)
+        {
+            extension = fileName.substr(lastPeriod + 1);
+        }
+    }
+    for(char &ch : extension)
+    {
+        ch = tolower(ch);
+    }
+    for(const Loader &loader : loaders) // detect based on extension
+    {
+        for(const char *const *eptr = loader.extensions; *eptr != nullptr; eptr++)
+        {
+            if(*eptr == extension)
+                return loader.loadFn(fileName, warningFunction);
+        }
+    }
+
+    // try to detect by checking which one doesn't fail
+
+    // cache warnings so we don't get warnings from a different loader than the successful one
+    vector<string> warnings;
+    function<void(string)> myWarningFunction = nullptr;
+    if(warningFunction)
+    {
+        myWarningFunction = [&warnings](string msg)
+        {
+            warnings.push_back(msg);
+        };
+    }
+    for(const Loader &loader : loaders)
+    {
+        try
+        {
+            shared_ptr<ModelLoader> retval = loader.loadFn(fileName, myWarningFunction);
+            if(warningFunction) // succeeded, so send the cached warnings
+            {
+                for(string msg : warnings)
+                {
+                    warningFunction(msg);
+                }
+            }
+            return retval;
+        }
+        catch(ModelLoadException &)
+        {
+            warnings.clear();
+        }
+    }
+    throw ModelLoadException("can't determine file type");
 }
