@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <sys/select.h>
 #include <thread>
+#include <stdio.h>
 
 using namespace std;
 
@@ -103,8 +104,23 @@ private:
         static bool didInit = false;
         if(didInit)
             return;
+        const char *n = ttyname(0);
+        if(!n)
+            throw runtime_error("not running on a virtual console");
+        string ttyname = n;
+        string ttyprefix = "/dev/tty";
+        if(ttyname.substr(0, ttyprefix.size()) != ttyprefix || ttyname == ttyprefix)
+            throw runtime_error("not running on a virtual console");
+        for(char ch : ttyname.substr(ttyprefix.size()))
+        {
+            if(!isdigit(ch))
+                throw runtime_error("not running on a virtual console");
+        }
+        if(getuid() != 0 && geteuid() != 0)
+            throw runtime_error("not running as the root user");
         didInit = true;
-        vga_init();
+        if(0 != vga_init())
+            throw runtime_error("vga_init failed");
         atexit([](){vga_setmode(TEXT);});
     }
     void writeFrame()

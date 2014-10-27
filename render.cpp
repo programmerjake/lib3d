@@ -1226,9 +1226,9 @@ const Driver drivers[] =
 #endif
     Driver("sdl", []()->shared_ptr<WindowRenderer>{return make_shared<SDLWindowRenderer>();}, makeSoftwareImageRenderer),
 #ifndef __EMSCRIPTEN__
+    Driver("svga", makeSVGARenderer, makeSoftwareImageRenderer),
     Driver("caca", makeCacaRenderer, makeSoftwareImageRenderer),
     Driver("aalib", makeLibAARenderer, makeSoftwareImageRenderer),
-    Driver("svga", makeSVGARenderer, makeSoftwareImageRenderer),
 #endif
     Driver("null", []()->shared_ptr<WindowRenderer>{return make_shared<NullWindowRenderer>();}, makeSoftwareImageRenderer),
 #ifndef __EMSCRIPTEN__

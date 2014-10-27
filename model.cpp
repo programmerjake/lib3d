@@ -702,11 +702,11 @@ class AC3DModelLoader : public ModelLoader // documentation is at http://www.ini
         }
         return RGBAF(limit<float>(color.r, 0, 1), limit<float>(color.g, 0, 1), limit<float>(color.b, 0, 1), limit<float>(color.a, 0, 1));
     }
-    ColorF parseColorSpecifier(size_t startingIndex, function<void(string)> warningFunction)
+    ColorF parseColorSpecifier(size_t startingIndex, function<void(string)> warningFunction, float scale = 1.0f)
     {
         if(line.size() < 3 + startingIndex)
             throw ModelLoadException("too few arguments for " + line[0]);
-        return validateColor(RGBF(parseFloat(line[startingIndex]), parseFloat(line[startingIndex + 1]), parseFloat(line[startingIndex + 2])), warningFunction);
+        return validateColor(RGBF(parseFloat(line[startingIndex]) * scale, parseFloat(line[startingIndex + 1]) * scale, parseFloat(line[startingIndex + 2]) * scale), warningFunction);
     }
     shared_ptr<Texture> loadImage(string fileName)
     {
@@ -912,9 +912,9 @@ class AC3DModelLoader : public ModelLoader // documentation is at http://www.ini
                         };
                         if((flags & typeMask) > 2)
                             throw ModelLoadException("invalid SURF flags : invalid type");
-                        bool isShaded = false;
+                        bool isShaded = true;
                         if(flags & shadedFlagMask)
-                            isShaded = true;
+                            isShaded = false;
                         bool isTwoSided = false;
                         if(flags & twoSidedFlagMask)
                             isTwoSided = true;
@@ -940,6 +940,10 @@ class AC3DModelLoader : public ModelLoader // documentation is at http://www.ini
                                 material = materials[materialIndex];
                                 material.texture = texture;
                             }
+                            warning(!isShaded, warningFunction, []()->string
+                            {
+                                return "material specified for non-shaded SURF";
+                            });
                             line = readTokenizedLine(is);
                         }
                         if(line[0] == "refs")
@@ -1056,7 +1060,7 @@ public:
             ColorF rgb = parseColorSpecifier(3, warningFunction);
             if(line[6] != "amb")
                 throw ModelLoadException("missing amb for " + line[0]);
-            ColorF amb = parseColorSpecifier(7, warningFunction);
+            ColorF amb = parseColorSpecifier(7, warningFunction, 0.2f);
             if(line[10] != "emis")
                 throw ModelLoadException("missing emis for " + line[0]);
             ColorF emis = parseColorSpecifier(11, warningFunction);
