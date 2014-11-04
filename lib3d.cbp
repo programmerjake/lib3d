@@ -112,6 +112,7 @@
 			<Add option="-march=nocona -fexceptions -mfpmath=sse -funsafe-math-optimizations" />
 			<Add option="--param inline-unit-growth=200" />
 		</Compiler>
+		<Unit filename="bsp_tree.h" />
 		<Unit filename="cacarenderer.cpp">
 			<Option target="Debug" />
 			<Option target="Release" />
