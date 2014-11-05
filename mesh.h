@@ -422,6 +422,10 @@ struct Mesh
     {
         return triangles.size();
     }
+    void reserve(size_t count)
+    {
+        triangles.reserve(count);
+    }
 };
 
 //inline TransformedMesh::operator Mesh() const

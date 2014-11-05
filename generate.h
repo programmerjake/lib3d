@@ -93,6 +93,66 @@ inline Mesh shadeMesh(Mesh &&meshIn, Fn shadeFn)
     return Mesh(std::move(triangles), std::move(meshIn.image));
 }
 
+struct CutMesh
+{
+    Mesh front, back;
+    CutMesh(Mesh front, Mesh back)
+        : front(std::move(front)), back(std::move(back))
+    {
+    }
+    CutMesh()
+    {
+    }
+};
+
+inline CutMesh cut(const Mesh &mesh, VectorF planeNormal, float planeD)
+{
+    Mesh front, back;
+    front.reserve(mesh.triangleCount() * 2);
+    back.reserve(mesh.triangleCount() * 2);
+    front.image = mesh.image;
+    back.image = mesh.image;
+    for(Triangle tri : mesh.triangles)
+    {
+        CutTriangle ct = cut(tri, planeNormal, planeD);
+        for(size_t i = 0; i < ct.frontTriangleCount; i++)
+            front.append(ct.frontTriangles[i]);
+        for(size_t i = 0; i < ct.backTriangleCount; i++)
+            back.append(ct.backTriangles[i]);
+    }
+    return CutMesh(std::move(front), std::move(back));
+}
+
+inline Mesh cutAndGetFront(Mesh mesh, VectorF planeNormal, float planeD)
+{
+    static thread_local vector<Triangle> triangles;
+    triangles = std::move(mesh.triangles);
+    mesh.triangles.clear();
+    mesh.reserve(triangles.size());
+    for(Triangle tri : triangles)
+    {
+        CutTriangle ct = cut(tri, planeNormal, planeD);
+        for(size_t i = 0; i < ct.frontTriangleCount; i++)
+            mesh.append(ct.frontTriangles[i]);
+    }
+    return std::move(mesh);
+}
+
+inline Mesh cutAndGetBack(Mesh mesh, VectorF planeNormal, float planeD)
+{
+    static thread_local vector<Triangle> triangles;
+    triangles = std::move(mesh.triangles);
+    mesh.triangles.clear();
+    mesh.reserve(triangles.size());
+    for(Triangle tri : triangles)
+    {
+        CutTriangle ct = cut(tri, planeNormal, planeD);
+        for(size_t i = 0; i < ct.backTriangleCount; i++)
+            mesh.append(ct.backTriangles[i]);
+    }
+    return std::move(mesh);
+}
+
 namespace Generate
 {
 	inline Mesh quadrilateral(TextureDescriptor texture, VectorF p1, ColorF c1, VectorF p2, ColorF c2, VectorF p3, ColorF c3, VectorF p4, ColorF c4)

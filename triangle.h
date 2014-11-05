@@ -32,6 +32,9 @@ struct Vertex
     VectorF p;
     ColorF c;
     VectorF n;
+    Vertex()
+    {
+    }
     constexpr Vertex(VectorF p, TextureCoord t, ColorF c, VectorF n)
         : t(t), p(p), c(c), n(n)
     {
@@ -95,6 +98,12 @@ struct Triangle
     }
     constexpr Triangle(Vertex v1_, Vertex v2_, Vertex v3_)
         : t1(v1_.t), t2(v2_.t), t3(v3_.t), p1(v1_.p), p2(v2_.p), p3(v3_.p), c1(v1_.c), c2(v2_.c), c3(v3_.c), n1(v1_.n), n2(v2_.n), n3(v3_.n)
+    {
+    }
+    constexpr bool empty() const
+    {
+        return absSquared(cross(p1 - p2, p1 - p3)) < eps * eps * eps * eps;
+    }
     VectorF normal() const
     {
         return normalizeNoThrow(cross(p1 - p2, p1 - p3));
@@ -141,20 +150,21 @@ struct CutTriangle final
 private:
     static void triangulate(Triangle triangles[], size_t &triangleCount, const Vertex vertices[], size_t vertexCount)
     {
-        triangleCount = 0;
+        size_t myTriangleCount = 0;
         if(vertexCount >= 3)
         {
-            triangleCount = vertexCount - 2;
             for(size_t i = 0, j = 1, k = 2; k < vertexCount; i++, j++, k++)
             {
-                triangles[i] = Triangle(vertices[0], vertices[j], vertices[k]);
+                Triangle tri(vertices[0], vertices[j], vertices[k]);
+                triangles[myTriangleCount++] = tri;
             }
         }
+        triangleCount = myTriangleCount;
     }
 public:
     CutTriangle(Triangle tri, VectorF planeNormal, float planeD)
     {
-        const size_t triangleVertexCount = 3, triangleEdgeCount = 3, resultMaxVertexCount = triangleVertexCount + 1;
+        const size_t triangleVertexCount = 3, resultMaxVertexCount = triangleVertexCount + 1;
         Vertex triVertices[triangleVertexCount] = {tri.v1(), tri.v2(), tri.v3()};
         bool isFront[triangleVertexCount];
         for(size_t i = 0; i < triangleVertexCount; i++)

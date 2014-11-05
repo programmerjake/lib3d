@@ -88,6 +88,19 @@ inline ColorF shadeFn(ColorF vColor, VectorF vNormal, VectorF vPosition)
     return scaleF(min<float>(1, v), vColor);
 }
 
+struct SetColorShadeFn
+{
+    ColorF color;
+    constexpr SetColorShadeFn(ColorF color)
+        : color(color)
+    {
+    }
+    ColorF operator ()(ColorF, VectorF, VectorF) const
+    {
+        return color;
+    }
+};
+
 int main(int argc, char **argv)
 {
     static shared_ptr<Model> model;
@@ -166,10 +179,14 @@ int main(int argc, char **argv)
             }
             else
             {
-                tform = (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI)).concat(Matrix::translate(0, 0, -30));
-                Mesh containerMesh = shadeMesh(colorize(RGBAF(1, 1, 1, 0.5), transform(tform, m2)), shadeFn);
+                tform = (Matrix::rotateY((time - startTime) / 5 * M_PI)).concat(Matrix::rotateX((time - startTime) / 15 * M_PI));
+                Matrix tform2 = Matrix::translate(0, 0, -30);
+                Mesh containerMesh = shadeMesh(colorize(RGBAF(1, 1, 1, 0.5), transform(tform.concat(tform2), m2)), shadeFn);
                 renderer->render(reverse(containerMesh));
-                renderer->render(shadeMesh(transform(tform, m), shadeFn));
+                Mesh preCutMesh = transform(tform, m);
+                CutMesh cutMesh = cut(transform(tform, m), (Matrix::rotateY(-M_PI / 16 * (sin((time - startTime) / 1 * M_PI)))).concat(Matrix::rotateZ((time - startTime) / 4 * M_PI)).apply(VectorF(-1, 0, 0)), 0);
+                renderer->render(shadeMesh(transform(tform2, cutMesh.front), shadeFn));
+                renderer->render(shadeMesh(shadeMesh(transform(tform2, cutMesh.back), SetColorShadeFn(HSBF((time - startTime) / 3, 1, 0.5))), shadeFn));
                 renderer->render(containerMesh);
             }
 #endif
