@@ -95,9 +95,9 @@ inline Mesh shadeMesh(Mesh &&meshIn, Fn shadeFn)
 
 struct CutMesh
 {
-    Mesh front, back;
-    CutMesh(Mesh front, Mesh back)
-        : front(std::move(front)), back(std::move(back))
+    Mesh front, coplanar, back;
+    CutMesh(Mesh front, Mesh coplanar, Mesh back)
+        : front(std::move(front)), coplanar(std::move(coplanar)), back(std::move(back))
     {
     }
     CutMesh()
@@ -107,20 +107,24 @@ struct CutMesh
 
 inline CutMesh cut(const Mesh &mesh, VectorF planeNormal, float planeD)
 {
-    Mesh front, back;
+    Mesh front, coplanar, back;
     front.reserve(mesh.triangleCount() * 2);
+    coplanar.reserve(mesh.triangleCount() * 2);
     back.reserve(mesh.triangleCount() * 2);
     front.image = mesh.image;
+    coplanar.image = mesh.image;
     back.image = mesh.image;
     for(Triangle tri : mesh.triangles)
     {
         CutTriangle ct = cut(tri, planeNormal, planeD);
         for(size_t i = 0; i < ct.frontTriangleCount; i++)
             front.append(ct.frontTriangles[i]);
+        for(size_t i = 0; i < ct.coplanarTriangleCount; i++)
+            coplanar.append(ct.coplanarTriangles[i]);
         for(size_t i = 0; i < ct.backTriangleCount; i++)
             back.append(ct.backTriangles[i]);
     }
-    return CutMesh(std::move(front), std::move(back));
+    return CutMesh(std::move(front), std::move(coplanar), std::move(back));
 }
 
 inline Mesh cutAndGetFront(Mesh mesh, VectorF planeNormal, float planeD)
@@ -134,6 +138,8 @@ inline Mesh cutAndGetFront(Mesh mesh, VectorF planeNormal, float planeD)
         CutTriangle ct = cut(tri, planeNormal, planeD);
         for(size_t i = 0; i < ct.frontTriangleCount; i++)
             mesh.append(ct.frontTriangles[i]);
+        for(size_t i = 0; i < ct.coplanarTriangleCount; i++)
+            mesh.append(ct.coplanarTriangles[i]);
     }
     return std::move(mesh);
 }
@@ -149,6 +155,8 @@ inline Mesh cutAndGetBack(Mesh mesh, VectorF planeNormal, float planeD)
         CutTriangle ct = cut(tri, planeNormal, planeD);
         for(size_t i = 0; i < ct.backTriangleCount; i++)
             mesh.append(ct.backTriangles[i]);
+        for(size_t i = 0; i < ct.coplanarTriangleCount; i++)
+            mesh.append(ct.coplanarTriangles[i]);
     }
     return std::move(mesh);
 }

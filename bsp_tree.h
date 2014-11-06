@@ -30,9 +30,6 @@ struct BSPNode final
     }
 };
 
-#error finish
-#warning finish
-
 class BSPTree final
 {
     BSPNode *root = nullptr;
@@ -54,74 +51,55 @@ class BSPTree final
         retval->back = dupNode(node->back);
         return retval;
     }
-    static void insertTriangle(BSPNode *&tree, Triangle tri, VectorF tNormal, float tD)
+    static void insertTriangle(BSPNode *&tree, Triangle tri)
     {
-        if(!node->good())
+        if(tri.empty())
         {
-            delete node;
             return;
         }
         if(tree == nullptr)
         {
-            tree = node;
+            tree = new BSPNode(tri);
             return;
         }
-        #error finish
-        if(absSquared(tree->normal - nodePlaneNormal) < eps * eps && abs(tree->d - nodePlaneD) < eps)
+        CutTriangle ct = cut(tri, tree->normal, tree->d);
+        for(size_t i = 0; i < ct.coplanarTriangleCount; i++)
         {
-            insertNode(tree->front, node);
-            return;
+            tree->triangles.push_back(ct.coplanarTriangles[i]);
         }
-        CutTriangle ct = cut(node->tri, tree->normal, tree->d);
-        if(ct.backTriangleCount + ct.frontTriangleCount <= 1)
-        {
-            if(ct.backTriangleCount > 0)
-            {
-                insertNode(tree->back, node);
-            }
-            else
-            {
-                insertNode(tree->front, node);
-            }
-            return;
-        }
-        bool usedPassedInNode = false;
         for(size_t i = 0; i < ct.backTriangleCount; i++)
         {
-            if(ct.backTriangles[i].empty())
-                continue;
-            if(usedPassedInNode)
-                insertNode(tree->back, new BSPNode(ct.backTriangles[i], nodePlaneNormal, nodePlaneD));
-            else
-            {
-                usedPassedInNode = true;
-                *node = BSPNode(ct.backTriangles[i], nodePlaneNormal, nodePlaneD);
-                insertNode(tree->back, node);
-            }
+            insertTriangle(tree->back, ct.backTriangles[i]);
         }
         for(size_t i = 0; i < ct.frontTriangleCount; i++)
         {
-            if(ct.frontTriangles[i].empty())
-                continue;
-            if(usedPassedInNode)
-                insertNode(tree->front, new BSPNode(ct.frontTriangles[i], nodePlaneNormal, nodePlaneD));
-            else
-            {
-                usedPassedInNode = true;
-                *node = BSPNode(ct.frontTriangles[i], nodePlaneNormal, nodePlaneD);
-                insertNode(tree->front, node);
-            }
+            insertTriangle(tree->front, ct.frontTriangles[i]);
         }
-        if(!usedPassedInNode)
-            delete node;
     }
     static void getTriangles(vector<Triangle> &triangles, const BSPNode *tree)
     {
         if(tree == nullptr)
             return;
         getTriangles(triangles, tree->front);
-        triangles.push_back(tree->tri);
+        triangles.insert(triangles.end(), tree->triangles.begin(), tree->triangles.end());
         getTriangles(triangles, tree->back);
+    }
+    static void getTriangles(vector<Triangle> &triangles, const BSPNode *tree, VectorF viewPoint)
+    {
+        if(tree == nullptr)
+            return;
+        if(dot(viewPoint, tree->normal) > -tree->d)
+        {
+            getTriangles(triangles, tree->back, viewPoint);
+            triangles.insert(triangles.end(), tree->triangles.begin(), tree->triangles.end());
+            getTriangles(triangles, tree->front, viewPoint);
+        }
+        else
+        {
+            getTriangles(triangles, tree->front, viewPoint);
+            triangles.insert(triangles.end(), tree->triangles.begin(), tree->triangles.end());
+            getTriangles(triangles, tree->back, viewPoint);
+        }
     }
 public:
     BSPTree()
@@ -174,8 +152,7 @@ public:
     }
     void insert(Triangle tri)
     {
-        if(!tri.empty())
-            insertNode(root, new BSPNode(tri));
+        insertTriangle(root, tri);
     }
     void insert(const vector<Triangle> &triangles)
     {
@@ -188,6 +165,12 @@ public:
     {
         buffer.clear();
         getTriangles(buffer, root);
+        return std::move(buffer);
+    }
+    vector<Triangle> getTriangles(VectorF viewPoint, vector<Triangle> buffer = vector<Triangle>()) const
+    {
+        buffer.clear();
+        getTriangles(buffer, root, viewPoint);
         return std::move(buffer);
     }
 };

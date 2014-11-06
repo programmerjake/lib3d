@@ -145,6 +145,8 @@ struct CutTriangle final
 {
     Triangle frontTriangles[2];
     size_t frontTriangleCount = 0;
+    Triangle coplanarTriangles[1];
+    size_t coplanarTriangleCount = 0;
     Triangle backTriangles[2];
     size_t backTriangleCount = 0;
 private:
@@ -166,9 +168,33 @@ public:
     {
         const size_t triangleVertexCount = 3, resultMaxVertexCount = triangleVertexCount + 1;
         Vertex triVertices[triangleVertexCount] = {tri.v1(), tri.v2(), tri.v3()};
+        float planeDistances[triangleVertexCount];
         bool isFront[triangleVertexCount];
+        bool isBack[triangleVertexCount];
+        bool isCoplanar = true, anyFront = false;
         for(size_t i = 0; i < triangleVertexCount; i++)
-            isFront[i] = (dot(triVertices[i].p, planeNormal) >= -planeD);
+        {
+            planeDistances[i] = dot(triVertices[i].p, planeNormal) + planeD;
+            isFront[i] = planeDistances[i] > eps;
+            isBack[i] = planeDistances[i] < -eps;
+            if(isFront[i] || isBack[i])
+                isCoplanar = false;
+            if(isFront[i])
+                anyFront = true;
+        }
+        if(isCoplanar)
+        {
+            coplanarTriangles[0] = tri;
+            coplanarTriangleCount = 1;
+            return;
+        }
+        if(anyFront)
+        {
+            for(size_t i = 0; i < triangleVertexCount; i++)
+            {
+                isFront[i] = !isBack[i];
+            }
+        }
         Vertex frontVertices[resultMaxVertexCount];
         size_t frontVertexCount = 0;
         Vertex backVertices[resultMaxVertexCount];
