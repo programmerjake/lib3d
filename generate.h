@@ -223,6 +223,21 @@ namespace Generate
         return Mesh(std::move(triangles), texture);
 	}
 
+	inline Mesh convexPolygon(shared_ptr<Texture> texture, vector<Vertex> vertices)
+	{
+	    if(vertices.size() < 3)
+            return Mesh();
+        vector<Triangle> triangles;
+        triangles.reserve(vertices.size() - 2);
+        Vertex v1 = vertices[0];
+        for(size_t i = 1, j = 2; j < vertices.size(); i++, j++)
+        {
+            Vertex v2 = vertices[i], v3 = vertices[j];
+            triangles.push_back(Triangle(v1, v2, v3));
+        }
+        return Mesh(std::move(triangles), texture);
+	}
+
 	/// make a box from <0, 0, 0> to <1, 1, 1>
 	inline Mesh unitBox(TextureDescriptor nx, TextureDescriptor px, TextureDescriptor ny, TextureDescriptor py, TextureDescriptor nz, TextureDescriptor pz)
 	{

@@ -49,7 +49,7 @@ VectorF sphericalCoordinates(float r, float theta, float phi)
     return Matrix::rotateZ(phi).concat(Matrix::rotateY(theta)).apply(VectorF(r, 0, 0));
 }
 
-shared_ptr<Mesh> makeSphereMesh(size_t uCount, size_t vCount, float r, shared_ptr<Texture> image = nullptr, ColorF color = RGBAF(1, 1, 1, 1))
+Mesh makeSphereMesh(size_t uCount, size_t vCount, float r, shared_ptr<Texture> image = nullptr, ColorF color = RGBAF(1, 1, 1, 1))
 {
     vector<Triangle> triangles;
     triangles.reserve(uCount * vCount * 2);
@@ -66,12 +66,44 @@ shared_ptr<Mesh> makeSphereMesh(size_t uCount, size_t vCount, float r, shared_pt
             TextureCoord t10 = TextureCoord((float)(ui + 1) / uCount, (float)(vi + 0) / vCount);
             TextureCoord t01 = TextureCoord((float)(ui + 0) / uCount, (float)(vi + 1) / vCount);
             TextureCoord t11 = TextureCoord((float)(ui + 1) / uCount, (float)(vi + 1) / vCount);
-            triangles.push_back(Triangle(p00 * r, t00, p00, p10 * r, t10, p10, p11 * r, t11, p11, color));
-            triangles.push_back(Triangle(p00 * r, t00, p00, p11 * r, t11, p11, p01 * r, t01, p01, color));
+            if(vi > 0)
+                triangles.push_back(Triangle(p00 * r, t00, p00, p10 * r, t10, p10, p11 * r, t11, p11, color));
+            if(vi + 1 < vCount)
+                triangles.push_back(Triangle(p00 * r, t00, p00, p11 * r, t11, p11, p01 * r, t01, p01, color));
         }
     }
 
-    return make_shared<Mesh>(triangles, image);
+    return Mesh(std::move(triangles), image);
+}
+
+Mesh makeCylinderMesh(size_t sideCount, float r, float length, ColorF color = RGBAF(1, 1, 1, 1))
+{
+    Mesh retval;
+    retval.reserve(sideCount * 4);
+    Vertex end0 = Vertex(VectorF(-r, -length, 0), TextureCoord(0, 0), color, VectorF(0, -1, 0));
+    Vertex end1 = Vertex(VectorF(-r, length, 0), TextureCoord(0, 0), color, VectorF(0, 1, 0));
+    Vertex side0 = Vertex(VectorF(-r, -length, 0), TextureCoord(0, 0), color, VectorF(-1, 0, 0));
+    Vertex side1 = Vertex(VectorF(-r, length, 0), TextureCoord(0, 0), color, VectorF(-1, 0, 0));
+    vector<Vertex> end0Vertices, end1Vertices;
+    end0Vertices.reserve(sideCount);
+    end1Vertices.reserve(sideCount);
+    for(size_t i = 0; i < sideCount; i++)
+    {
+        Transform tform0 = Matrix::rotateY((float)(i + 0) / sideCount * 2 * M_PI);
+        Transform tform1 = Matrix::rotateY((float)(i + 1) / sideCount * 2 * M_PI);
+        Vertex vs00 = transform(tform0, side0);
+        Vertex vs01 = transform(tform0, side1);
+        Vertex vs10 = transform(tform1, side0);
+        Vertex vs11 = transform(tform1, side1);
+        retval.append(Triangle(vs00, vs11, vs01));
+        retval.append(Triangle(vs00, vs10, vs11));
+        end0Vertices.push_back(transform(tform0, end0));
+        end1Vertices.push_back(transform(tform0, end1));
+    }
+    reverse(end0Vertices.begin(), end0Vertices.end());
+    retval.append(Generate::convexPolygon(nullptr, end0Vertices));
+    retval.append(Generate::convexPolygon(nullptr, end1Vertices));
+    return std::move(retval);
 }
 
 inline ColorF shadeFn(ColorF vColor, VectorF vNormal, VectorF vPosition)
@@ -118,14 +150,14 @@ int main(int argc, char **argv)
         minstd_rand0 randomGenerator;
         static shared_ptr<Mesh> m = makeRandomMesh(randomGenerator, 20);
         m->append(reverse(*m));
-        static shared_ptr<Mesh> m2;
+        static Mesh m2;
         static shared_ptr<ImageRenderer> imageRenderer;
         static shared_ptr<Texture> testTexture = renderer->preloadTexture(make_shared<ImageTexture>(Image::loadImage("test2.png")));
 
         if(true)
         {
             TextureDescriptor td(testTexture);
-            m2 = (shared_ptr<Mesh>)transform(Matrix::translate(VectorF(-0.5)).concat(Matrix::scale(2 * 10)), Generate::unitBox(td, td, td, td, td, td));
+            m2 = transform(Matrix::translate(VectorF(-0.5)).concat(Matrix::scale(2 * 10)), Generate::unitBox(td, td, td, td, td, td));
             imageRenderer = makeImageRenderer(1024, 1024);
         }
         else
@@ -144,6 +176,20 @@ int main(int argc, char **argv)
             {
                 get<1>(m).append(reverse(get<1>(m)));
             }
+        }
+        static Mesh m3;
+        if(!model)
+        {
+            m3 = makeSphereMesh(10, 5, 6, nullptr, RGBF(1, 0, 1));
+            TextureDescriptor td(testTexture);
+            BSPTree csgObject = BSPTree(((Mesh)transform(Matrix::translate(VectorF(-0.5)).concat(Matrix::scale(2 * 5)), Generate::unitBox(td, td, td, td, td, td))).triangles);
+            BSPTree t = BSPTree(m3.triangles);
+            BSPTree cylinder = BSPTree(makeCylinderMesh(5, 2, 10, RGBF(1, 1, 0)).triangles);
+            t = csgDifference(csgIntersection(std::move(t), std::move(csgObject)), cylinder);
+            t = csgDifference(std::move(t), transform(Matrix::rotateZ(M_PI / 2), cylinder));
+            t = csgDifference(std::move(t), transform(Matrix::rotateX(M_PI / 2), std::move(cylinder)));
+            m3 = colorize(RGBAF(1, 1, 1, 0.95), Mesh(t.getTriangles(std::move(m3.triangles)), m3.image));
+            cout << "model has " << m3.triangleCount() << " triangles." << endl;
         }
 
         static shared_ptr<Texture> fontTexture = renderer->preloadTexture(loadTextFontTexture());
@@ -185,15 +231,12 @@ int main(int argc, char **argv)
                 VectorF viewPoint = inverse(tform2).apply(VectorF(0));
                 Mesh containerMesh = shadeMesh(colorize(RGBAF(1, 1, 1, 0.5), transform(tform.concat(tform2), m2)), shadeFn);
                 renderer->render(reverse(containerMesh));
-                Mesh preCutMesh = transform(tform, m);
-                {
-                    BSPTree t = BSPTree(preCutMesh.triangles);
-                    t.getTriangles(viewPoint, preCutMesh.triangles);
-                }
-                CutMesh cutMesh = cut(transform(tform, m), (Matrix::rotateY(-M_PI / 16 * (sin((time - startTime) / 1 * M_PI)))).concat(Matrix::rotateZ((time - startTime) / 4 * M_PI)).apply(VectorF(-1, 0, 0)), 0);
-                cutMesh.front.append(cutMesh.coplanar);
-                renderer->render(shadeMesh(transform(tform2, cutMesh.front), shadeFn));
-                renderer->render(shadeMesh(shadeMesh(transform(tform2, cutMesh.back), SetColorShadeFn(HSBAF((time - startTime) / 3, 1, 0.5, 0.25))), shadeFn));
+                Mesh preCutMesh = transform(tform, m3);
+                renderer->render(shadeMesh(transform(tform2, preCutMesh), shadeFn));
+                //CutMesh cutMesh = cut(preCutMesh, (Matrix::rotateY(-M_PI / 16 * (sin((time - startTime) / 1 * M_PI)))).concat(Matrix::rotateZ((time - startTime) / 4 * M_PI)).apply(VectorF(-1, 0, 0)), 0);
+                //cutMesh.front.append(cutMesh.coplanar);
+                //renderer->render(shadeMesh(transform(tform2, cutMesh.front), shadeFn));
+                //renderer->render(shadeMesh(shadeMesh(transform(tform2, cutMesh.back), SetColorShadeFn(HSBAF((time - startTime) / 3, 1, 0.5, 0.25))), shadeFn));
                 renderer->render(containerMesh);
             }
 #endif

@@ -100,13 +100,17 @@ struct Triangle
         : t1(v1_.t), t2(v2_.t), t3(v3_.t), p1(v1_.p), p2(v2_.p), p3(v3_.p), c1(v1_.c), c2(v2_.c), c3(v3_.c), n1(v1_.n), n2(v2_.n), n3(v3_.n)
     {
     }
+    constexpr VectorF point_cross() const
+    {
+        return cross(p1 - p2, p1 - p3);
+    }
     constexpr bool empty() const
     {
-        return absSquared(cross(p1 - p2, p1 - p3)) < eps * eps * eps * eps;
+        return absSquared(point_cross()) < eps * eps * eps * eps;
     }
     VectorF normal() const
     {
-        return normalizeNoThrow(cross(p1 - p2, p1 - p3));
+        return normalizeNoThrow(point_cross());
     }
     constexpr Vertex v1() const
     {
@@ -127,6 +131,11 @@ inline Triangle transform(const Transform & m, const Triangle & t)
     return Triangle(transform(m, t.p1), t.t1, t.c1, transformNormal(m, t.n1),
                      transform(m, t.p2), t.t2, t.c2, transformNormal(m, t.n2),
                      transform(m, t.p3), t.t3, t.c3, transformNormal(m, t.n3));
+}
+
+inline Vertex transform(Transform tform, Vertex v)
+{
+    return Vertex(transform(tform, v.p), v.t, v.c, transformNormal(tform, v.n));
 }
 
 constexpr Triangle colorize(ColorF color, const Triangle & t)

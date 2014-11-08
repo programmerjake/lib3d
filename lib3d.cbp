@@ -29,7 +29,6 @@
 				<Option object_output="obj/Release/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
-				<Option parameters="test_objects/P51/P51_Mustang.obj" />
 				<Compiler>
 					<Add option="-O3" />
 					<Add option="-Winline" />
