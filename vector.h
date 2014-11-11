@@ -4,6 +4,7 @@
 #include <cmath>
 #include <new>
 #include <stdexcept>
+#include <utility> // for std::hash<T>
 
 static constexpr float eps = 1e-4;
 
@@ -130,6 +131,19 @@ struct VectorF
         return operator =(operator /(rt));
     }
 };
+
+namespace std
+{
+template <>
+struct hash<VectorF>
+{
+    hash<float> floatHasher;
+    size_t operator ()(VectorF v) const
+    {
+        return floatHasher(v.x) + 2 * floatHasher(v.y) + 3 * floatHasher(v.z);
+    }
+};
+}
 
 constexpr float dot(const VectorF & a, const VectorF & b)
 {

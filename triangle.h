@@ -5,6 +5,7 @@
 #include "image.h"
 #include "matrix.h"
 #include <algorithm>
+#include <utility> // for std::hash<T>
 
 using namespace std;
 
@@ -19,7 +20,28 @@ struct TextureCoord
         : u(0), v(0)
     {
     }
+    friend constexpr bool operator ==(TextureCoord a, TextureCoord b)
+    {
+        return a.u == b.u && a.v == b.v;
+    }
+    friend constexpr bool operator !=(TextureCoord a, TextureCoord b)
+    {
+        return !(a == b);
+    }
 };
+
+namespace std
+{
+template <>
+struct hash<TextureCoord>
+{
+    hash<float> floatHasher;
+    size_t operator ()(TextureCoord t) const
+    {
+        return 2 * floatHasher(t.u) + floatHasher(t.v);
+    }
+};
+}
 
 constexpr TextureCoord interpolate(float v, TextureCoord a, TextureCoord b)
 {
@@ -39,7 +61,30 @@ struct Vertex
         : t(t), p(p), c(c), n(n)
     {
     }
+    friend constexpr bool operator ==(Vertex a, Vertex b)
+    {
+        return a.t == b.t && a.p == b.p && a.c == b.c && a.n == b.n;
+    }
+    friend constexpr bool operator !=(Vertex a, Vertex b)
+    {
+        return !(a == b);
+    }
 };
+
+namespace std
+{
+template <>
+struct hash<Vertex>
+{
+    hash<TextureCoord> textureCoordHasher;
+    hash<VectorF> vectorHasher;
+    hash<ColorF> colorHasher;
+    size_t operator ()(const Vertex &v) const
+    {
+        return vectorHasher(v.p) + 2 * vectorHasher(v.n) + 3 * textureCoordHasher(v.t) + 5 * colorHasher(v.c);
+    }
+};
+}
 
 constexpr Vertex interpolate(float v, Vertex a, Vertex b) // doesn't normalize
 {

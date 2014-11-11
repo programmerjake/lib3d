@@ -44,6 +44,19 @@ public:
     }
 };
 
+namespace std
+{
+template <>
+struct hash<ColorI>
+{
+    hash<uint8_t> uint8Hasher;
+    size_t operator ()(ColorI c) const
+    {
+        return uint8Hasher(c.r) + 2 * uint8Hasher(c.g) + 3 * uint8Hasher(c.b) + 5 * uint8Hasher(c.a);
+    }
+};
+}
+
 constexpr ColorI RGBAI(int R, int G, int B, int A)
 {
     return ColorI((uint8_t)R, (uint8_t)G, (uint8_t)B, (uint8_t)A);
@@ -126,6 +139,19 @@ public:
         return a.r != b.r || a.g != b.g || a.b != b.b || a.a != b.a;
     }
 };
+
+namespace std
+{
+template <>
+struct hash<ColorF>
+{
+    hash<float> floatHasher;
+    size_t operator ()(ColorF c) const
+    {
+        return floatHasher(c.r) + 2 * floatHasher(c.g) + 3 * floatHasher(c.b) + 5 * floatHasher(c.a);
+    }
+};
+}
 
 constexpr ColorF RGBAF(float r, float g, float b, float a)
 {

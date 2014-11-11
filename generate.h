@@ -27,6 +27,10 @@
 #include <cwchar>
 #include <string>
 #include <cmath>
+#include <deque>
+#include <unordered_map>
+#include <array>
+#include <list>
 
 using namespace std;
 
@@ -157,6 +161,70 @@ inline Mesh cutAndGetBack(Mesh mesh, VectorF planeNormal, float planeD)
             mesh.append(ct.backTriangles[i]);
         for(size_t i = 0; i < ct.coplanarTriangleCount; i++)
             mesh.append(ct.coplanarTriangles[i]);
+    }
+    return std::move(mesh);
+}
+
+inline Mesh simplify(Mesh mesh)
+{
+    vector<Vertex> vertexList;
+    unordered_map<Vertex, size_t> vertexMap;
+    constexpr size_t verticesPerTriangle = 3;
+    typedef tuple<array<size_t, verticesPerTriangle>, VectorF> SimpTriangle;
+    typedef list<SimpTriangle> STList;
+    vector<vector<STList::iterator>> trianglesMap;
+    STList triangles;
+    deque<STList::iterator> changedQueue;
+    triangles.reserve(mesh.triangles.size());
+    for(Triangle tri : mesh.triangles)
+    {
+        STList::iterator triangleIter = triangles.insert(triangles.end(), SimpTriangle());
+        changedQueue.push_back(triangleIter);
+        SimpTriangle &triangle = triangles.back();
+        array<Vertex, verticesPerTriangle> vertices = {tri.v1(), tri.v2(), tri.v3()};
+        for(size_t i = 0; i < verticesPerTriangle; i++)
+        {
+            Vertex vertex = vertices[i];
+            size_t vertexIndex;
+            {
+                auto iter = vertexMap.find(vertex);
+                if(iter == vertexMap.end())
+                {
+                    vertexIndex = vertexList.size();
+                    vertexMap[vertex] = vertexList.size();
+                    vertexList.push_back(vertex);
+                    trianglesMap.push_back(vector<STList::iterator>{triangleIter});
+                }
+                else
+                {
+                    vertexIndex = std::get<1>(*iter);
+                    trianglesMap[vertexIndex].push_back(triangleIter);
+                }
+            }
+            std::get<0>(triangle)[i] = vertexIndex;
+        }
+        std::get<1>(triangle) = tri.normal();
+    }
+#if 0
+    while(!changedQueue.empty())
+    {
+        STList::iterator triangleIter = changedQueue.front();
+        changedQueue.pop_front();
+        for(size_t i = 0; i < verticesPerTriangle; i++)
+        {
+            for(STList::iterator secondTriangle : trianglesMap[std::get<0>(*triangleIter)[i]])
+            {
+                array<int, verticesPerTriangle> matchIndices;
+            }
+        }
+    }
+#else
+#warning finish
+#endif
+    mesh.triangles.clear();
+    for(const SimpTriangle &triangle : triangles)
+    {
+        mesh.triangles.push_back(Triangle(vertexList[std::get<0>(triangle)[0]], vertexList[std::get<0>(triangle)[1]], vertexList[std::get<0>(triangle)[2]]));
     }
     return std::move(mesh);
 }
