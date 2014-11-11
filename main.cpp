@@ -180,15 +180,21 @@ int main(int argc, char **argv)
         static Mesh m3;
         if(!model)
         {
-            m3 = makeSphereMesh(10, 5, 6, nullptr, RGBF(1, 0, 1));
+            m3 = makeSphereMesh(20, 10, 12 * 0.9, nullptr, RGBF(1, 0, 1));
             TextureDescriptor td(testTexture);
-            BSPTree csgObject = BSPTree(((Mesh)transform(Matrix::translate(VectorF(-0.5)).concat(Matrix::scale(2 * 5)), Generate::unitBox(td, td, td, td, td, td))).triangles);
+            BSPTree csgObject = BSPTree(((Mesh)transform(Matrix::translate(VectorF(-0.5)).concat(Matrix::scale(2 * 10 * 0.9)), Generate::unitBox(td, td, td, td, td, td))).triangles);
             BSPTree t = BSPTree(m3.triangles);
-            BSPTree cylinder = BSPTree(makeCylinderMesh(5, 2, 10, RGBF(1, 1, 0)).triangles);
-            t = csgDifference(csgIntersection(std::move(t), std::move(csgObject)), cylinder);
+            BSPTree cylinder = BSPTree(makeCylinderMesh(10, 4 * 0.9, 20, RGBF(1, 1, 0)).triangles);
+            t = csgIntersection(std::move(t), std::move(csgObject));
+            t = BSPTree(simplify(t.getTriangles()));
+            t = csgDifference(std::move(t), cylinder);
+            t = BSPTree(simplify(t.getTriangles()));
             t = csgDifference(std::move(t), transform(Matrix::rotateZ(M_PI / 2), cylinder));
+            t = BSPTree(simplify(t.getTriangles()));
             t = csgDifference(std::move(t), transform(Matrix::rotateX(M_PI / 2), std::move(cylinder)));
-            m3 = colorize(RGBAF(1, 1, 1, 0.95), Mesh(t.getTriangles(std::move(m3.triangles)), m3.image));
+            m3 = Mesh(t.getTriangles(std::move(m3.triangles)), m3.image);
+            cout << "model has " << m3.triangleCount() << " triangles." << endl;
+            m3 = simplify(std::move(m3));
             cout << "model has " << m3.triangleCount() << " triangles." << endl;
         }
 

@@ -165,7 +165,9 @@ inline Mesh cutAndGetBack(Mesh mesh, VectorF planeNormal, float planeD)
     return std::move(mesh);
 }
 
-inline Mesh simplify(Mesh mesh)
+constexpr const float simplifyDefaultEps = 1e-6;
+
+inline vector<Triangle> simplify(vector<Triangle> meshTriangles, float faceNormalEps = simplifyDefaultEps, float distanceEps = simplifyDefaultEps, float vertexNormalEps = simplifyDefaultEps, float vertexTextureEps = simplifyDefaultEps, float vertexColorEps = simplifyDefaultEps)
 {
     vector<Vertex> vertexList;
     unordered_map<Vertex, size_t> vertexMap;
@@ -175,8 +177,7 @@ inline Mesh simplify(Mesh mesh)
     vector<vector<STList::iterator>> trianglesMap;
     STList triangles;
     deque<STList::iterator> changedQueue;
-    triangles.reserve(mesh.triangles.size());
-    for(Triangle tri : mesh.triangles)
+    for(Triangle tri : meshTriangles)
     {
         STList::iterator triangleIter = triangles.insert(triangles.end(), SimpTriangle());
         changedQueue.push_back(triangleIter);
@@ -205,27 +206,141 @@ inline Mesh simplify(Mesh mesh)
         }
         std::get<1>(triangle) = tri.normal();
     }
-#if 0
     while(!changedQueue.empty())
     {
         STList::iterator triangleIter = changedQueue.front();
         changedQueue.pop_front();
+        if(std::get<1>(*triangleIter) == VectorF(0))
+            continue;
+        bool done = false;
         for(size_t i = 0; i < verticesPerTriangle; i++)
         {
             for(STList::iterator secondTriangle : trianglesMap[std::get<0>(*triangleIter)[i]])
             {
+                if(secondTriangle == triangleIter)
+                    continue;
+                if(std::get<1>(*secondTriangle) == VectorF(0))
+                    continue;
+                if(absSquared(std::get<1>(*triangleIter) - std::get<1>(*secondTriangle)) > faceNormalEps * faceNormalEps)
+                    continue;
                 array<int, verticesPerTriangle> matchIndices;
+                array<bool, verticesPerTriangle> used;
+                for(bool &v : used)
+                    v = false;
+                size_t matchCount = 0;
+                for(size_t j = 0; j < verticesPerTriangle; j++)
+                {
+                    matchIndices[j] = -1;
+                    for(size_t k = 0; k < verticesPerTriangle; k++)
+                    {
+                        if(std::get<0>(*triangleIter)[j] == std::get<0>(*secondTriangle)[k])
+                        {
+                            matchIndices[j] = k;
+                            used[k] = true;
+                            matchCount++;
+                            break;
+                        }
+                    }
+                }
+                if(matchCount >= 3)
+                {
+                    std::get<1>(*triangleIter) = VectorF(0); // delete duplicates
+                    continue;
+                }
+                if(matchCount < 2)
+                    continue;
+                size_t firstTriangleNonTouchingIndex = 0, secondTriangleNonTouchingIndex = 0;
+                for(size_t j = 0; j < verticesPerTriangle; j++)
+                {
+                    if(matchIndices[j] == -1)
+                    {
+                        firstTriangleNonTouchingIndex = j;
+                        break;
+                    }
+                }
+                for(size_t j = 0; j < verticesPerTriangle; j++)
+                {
+                    if(!used[j])
+                    {
+                        secondTriangleNonTouchingIndex = j;
+                        break;
+                    }
+                }
+                array<size_t, verticesPerTriangle> tri1, tri2;
+                for(size_t j = 0, k = firstTriangleNonTouchingIndex; j < verticesPerTriangle; j++, k = (k >= verticesPerTriangle - 1 ? k + 1 - verticesPerTriangle : k + 1))
+                {
+                    tri1[j] = std::get<0>(*triangleIter)[k];
+                }
+                for(size_t j = 0, k = secondTriangleNonTouchingIndex; j < verticesPerTriangle; j++, k = (k >= verticesPerTriangle - 1 ? k + 1 - verticesPerTriangle : k + 1))
+                {
+                    tri2[j] = std::get<0>(*secondTriangle)[k];
+                }
+                Vertex lineStartVertex = vertexList[tri1[0]], lineEndVertex = vertexList[tri2[0]];
+                VectorF deltaPosition = lineEndVertex.p - lineStartVertex.p;
+                float planeD = -dot(deltaPosition, lineStartVertex.p);
+                if(absSquared(deltaPosition) < distanceEps * distanceEps)
+                    continue;
+                size_t removeVertex = 0;
+                for(size_t j = 1; j < verticesPerTriangle; j++)
+                {
+                    Vertex middleVertex = vertexList[tri1[j]];
+                    float t = (dot(middleVertex.p, deltaPosition) + planeD) / absSquared(deltaPosition);
+                    Vertex calculatedMiddleVertex = interpolate(t, lineStartVertex, lineEndVertex);
+                    if(absSquared(calculatedMiddleVertex.p - middleVertex.p) > distanceEps * distanceEps)
+                        continue;
+                    if(absSquared(calculatedMiddleVertex.n - middleVertex.n) > vertexNormalEps * vertexNormalEps)
+                        continue;
+                    if(abs(calculatedMiddleVertex.c.r - middleVertex.c.r) > vertexColorEps)
+                        continue;
+                    if(abs(calculatedMiddleVertex.c.g - middleVertex.c.g) > vertexColorEps)
+                        continue;
+                    if(abs(calculatedMiddleVertex.c.b - middleVertex.c.b) > vertexColorEps)
+                        continue;
+                    if(abs(calculatedMiddleVertex.c.a - middleVertex.c.a) > vertexColorEps)
+                        continue;
+                    if(abs(calculatedMiddleVertex.t.u - middleVertex.t.u) > vertexTextureEps)
+                        continue;
+                    if(abs(calculatedMiddleVertex.t.v - middleVertex.t.v) > vertexTextureEps)
+                        continue;
+                    removeVertex = j;
+                    break;
+                }
+                if(removeVertex == 0)
+                    continue;
+                std::get<1>(*secondTriangle) = VectorF(0); // remove second triangle
+                if(removeVertex == 1)
+                {
+                    std::get<0>(*triangleIter)[0] = tri1[0];
+                    std::get<0>(*triangleIter)[1] = tri2[0];
+                    std::get<0>(*triangleIter)[2] = tri1[2];
+                }
+                else
+                {
+                    std::get<0>(*triangleIter)[0] = tri1[0];
+                    std::get<0>(*triangleIter)[1] = tri1[1];
+                    std::get<0>(*triangleIter)[2] = tri2[0];
+                }
+                changedQueue.push_back(triangleIter);
+                done = true;
+                break;
             }
+            if(done)
+                break;
         }
     }
-#else
-#warning finish
-#endif
-    mesh.triangles.clear();
+    meshTriangles.clear();
     for(const SimpTriangle &triangle : triangles)
     {
-        mesh.triangles.push_back(Triangle(vertexList[std::get<0>(triangle)[0]], vertexList[std::get<0>(triangle)[1]], vertexList[std::get<0>(triangle)[2]]));
+        if(std::get<1>(triangle) == VectorF(0))
+            continue;
+        meshTriangles.push_back(Triangle(vertexList[std::get<0>(triangle)[0]], vertexList[std::get<0>(triangle)[1]], vertexList[std::get<0>(triangle)[2]]));
     }
+    return std::move(meshTriangles);
+}
+
+inline Mesh simplify(Mesh mesh, float faceNormalEps = simplifyDefaultEps, float distanceEps = simplifyDefaultEps, float vertexNormalEps = simplifyDefaultEps, float vertexTextureEps = simplifyDefaultEps, float vertexColorEps = simplifyDefaultEps)
+{
+    mesh.triangles = simplify(std::move(mesh.triangles), faceNormalEps, distanceEps, vertexNormalEps, vertexTextureEps, vertexColorEps);
     return std::move(mesh);
 }
 
