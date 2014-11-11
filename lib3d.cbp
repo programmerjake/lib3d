@@ -31,7 +31,6 @@
 				<Option compiler="gcc" />
 				<Compiler>
 					<Add option="-O3" />
-					<Add option="-Winline" />
 					<Add option="`sdl2-config --cflags` `pkg-config libavcodec libavformat libavutil libswscale MagickWand --cflags`" />
 				</Compiler>
 				<Linker>
@@ -52,7 +51,6 @@
 				<Option createStaticLib="1" />
 				<Compiler>
 					<Add option="-O3" />
-					<Add option="-Winline" />
 					<Add option="`sdl2-config --cflags` `pkg-config libavcodec libavformat libavutil libswscale MagickWand --cflags`" />
 				</Compiler>
 				<Linker>
@@ -85,7 +83,6 @@
 				<Option parameters="test_objects/P51/P51_Mustang.obj" />
 				<Compiler>
 					<Add option="-O3" />
-					<Add option="-Winline" />
 					<Add option="-pg" />
 					<Add option="-g" />
 					<Add option="`sdl2-config --cflags` `pkg-config libavcodec libavformat libavutil libswscale MagickWand --cflags`" />

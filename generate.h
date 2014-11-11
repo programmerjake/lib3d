@@ -172,7 +172,7 @@ namespace Generate
 		return Mesh(vector<Triangle>{Triangle(p1, c1, t1, p2, c2, t2, p3, c3, t3), Triangle(p3, c3, t3, p4, c4, t4, p1, c1, t1)}, texture.image);
 	}
 
-	inline Mesh convexPolygon(shared_ptr<Texture> texture, vector<tuple<VectorF, ColorF, TextureCoord, VectorF>> vertices)
+	inline Mesh convexPolygon(shared_ptr<Texture> texture, const vector<tuple<VectorF, ColorF, TextureCoord, VectorF>> &vertices)
 	{
 	    if(vertices.size() < 3)
             return Mesh();
@@ -189,7 +189,7 @@ namespace Generate
         return Mesh(std::move(triangles), texture);
 	}
 
-	inline Mesh convexPolygon(shared_ptr<Texture> texture, vector<tuple<VectorF, ColorF, TextureCoord>> vertices)
+	inline Mesh convexPolygon(shared_ptr<Texture> texture, const vector<tuple<VectorF, ColorF, TextureCoord>> &vertices)
 	{
 	    if(vertices.size() < 3)
             return Mesh();
@@ -206,7 +206,7 @@ namespace Generate
         return Mesh(std::move(triangles), texture);
 	}
 
-	inline Mesh convexPolygon(shared_ptr<Texture> texture, vector<tuple<VectorF, TextureCoord>> vertices)
+	inline Mesh convexPolygon(shared_ptr<Texture> texture, const vector<tuple<VectorF, TextureCoord>> &vertices)
 	{
 	    if(vertices.size() < 3)
             return Mesh();
@@ -223,7 +223,7 @@ namespace Generate
         return Mesh(std::move(triangles), texture);
 	}
 
-	inline Mesh convexPolygon(shared_ptr<Texture> texture, vector<Vertex> vertices)
+	inline Mesh convexPolygon(shared_ptr<Texture> texture, const vector<Vertex> &vertices)
 	{
 	    if(vertices.size() < 3)
             return Mesh();
