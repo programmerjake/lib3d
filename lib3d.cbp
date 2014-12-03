@@ -104,7 +104,7 @@
 		<Compiler>
 			<Add option="-Wall" />
 			<Add option="-std=c++11" />
-			<Add option="-march=nocona -fexceptions -mfpmath=sse -funsafe-math-optimizations" />
+			<Add option="-march=native -fexceptions -mfpmath=sse -funsafe-math-optimizations" />
 			<Add option="--param inline-unit-growth=200" />
 		</Compiler>
 		<Unit filename="bsp_tree.h" />
